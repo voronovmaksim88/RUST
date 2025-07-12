@@ -1,7 +1,14 @@
 use std::io;
+use colored::*; // Подключаем крейт colored
 
 fn main() {
-    println!("Hello, Den from RUST!");
+    // Включить поддержку ANSI для Windows 10+
+    #[cfg(windows)]
+    colored::control::set_virtual_terminal(true).unwrap();
+
+    // Выводим зелёный текст
+    println!("{}", "Hello, from RUST!".green());
+
 
     // Переменная (неизменяемая)
     let number = 42;
