@@ -4,7 +4,7 @@ use colored::*; // Подключаем крейт colored
 fn main() {
     // Включить поддержку ANSI для Windows 10+
     #[cfg(windows)]
-    colored::control::set_virtual_terminal(true).unwrap();
+    control::set_virtual_terminal(true).unwrap(); // модуль control входит в colored
 
     // Выводим зелёный текст
     println!("{}", "Hello, from RUST!".green());
