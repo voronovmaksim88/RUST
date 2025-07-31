@@ -1,3 +1,4 @@
+use colored::*;
 use std::io;
 
 fn main() {
@@ -8,8 +9,8 @@ fn main() {
     let num2: i8 = read_number();
 
     match num1.checked_add(num2) {
-        Some(sum) => println!("Сумма чисел: {}", sum),
-        None => println!("Ошибка: переполнение при сложении!"),
+        Some(sum) => println!("{}", format!("Сумма чисел: {}", sum).green()),
+        None => println!("{}", "Ошибка: переполнение при сложении!".to_string().red()),
     }
 
     // Ожидание нажатия Enter перед завершением
