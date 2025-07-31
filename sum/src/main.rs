@@ -2,6 +2,10 @@ use colored::*;
 use std::io;
 
 fn main() {
+    // Включить поддержку ANSI для Windows 10+
+    #[cfg(windows)]
+    control::set_virtual_terminal(true).unwrap(); // модуль control входит в colored
+
     println!("Введите первое число i8:");
     let num1: i8 = read_number();
 
