@@ -10,19 +10,20 @@ fn main() {
     println!("{}", "Hello, from RUST!".green());
 
     // Переменная (неизменяемая)
-    let number = 42;
+    let not_mut_number = 42;
 
     // Выводим значение переменной
-    println!("Значение неизменяемой переменной: {}", number); 
+    println!("Значение неизменяемой переменной not_mut_number: {}", not_mut_number); 
 
     // Переменная (изменяемая) типа i32
-    let mut var_num = 1;
-    var_num += 1;
+    let mut mut_number = 1;
+    mut_number += 1;
     
-    // Выводим значение переменной
-    println!("Значение переменной var_num: {}", var_num); 
+    // Выводим значение изменяемой переменной
+    println!("Значение изменяемой переменной mut_number: {}", mut_number); 
 
     // Ожидаем ввода пользователя перед закрытием
+    println!("Нажмите Enter для выхода...");
     let mut input = String::new();
     io::stdin().read_line(&mut input).expect("Failed to read line");
 }
