@@ -10,7 +10,7 @@ fn main() {
     println!("{}", "Hello, from RUST!".green());
 
     // Переменная (неизменяемая)
-    let not_mut_number = 42;
+    let not_mut_number = 1;
 
     // Выводим значение переменной
     println!("Значение неизменяемой переменной not_mut_number: {}", not_mut_number); 
