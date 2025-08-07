@@ -1,6 +1,6 @@
 use tokio_modbus::prelude::*;
 use tokio_serial::{SerialStream};
-use std::io;
+use std::io::{self, Write};
 use colored::*;
 use serialport;
 
@@ -72,6 +72,40 @@ fn scan_available_ports(available_ports: &mut [u8; 10]) -> usize {
     count
 }
 
+/// Функция выбора COM-порта пользователем
+fn select_com_port(available_ports: &[u8; 10], ports_count: usize) -> io::Result<Option<String>> {
+    if ports_count == 0 {
+        println!("{}", "Доступные COM-порты не найдены!".red());
+        return Ok(None);
+    }
+    
+    println!("\n{}", "Выберите COM-порт для подключения:".cyan());
+    
+    // Показываем список доступных портов
+    for i in 0..ports_count {
+        println!("  {}. COM{}", i + 1, available_ports[i]);
+    }
+    
+    loop {
+        print!("\nВведите номер порта (1-{}): ", ports_count);
+        io::stdout().flush()?;
+        
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        
+        match input.trim().parse::<usize>() {
+            Ok(choice) if choice >= 1 && choice <= ports_count => {
+                let selected_port = format!("COM{}", available_ports[choice - 1]);
+                println!("{}", format!("Выбран порт: {}", selected_port).green());
+                return Ok(Some(selected_port));
+            }
+            _ => {
+                println!("{}", format!("Неверный выбор! Введите число от 1 до {}", ports_count).red());
+            }
+        }
+    }
+}
+
 /// Функция ожидания нажатия Enter для завершения программы
 fn wait_for_enter() -> io::Result<()> {
     println!("\nНажмите Enter для завершения программы...");
@@ -88,11 +122,19 @@ async fn main() -> io::Result<()> {
     let mut available_ports: [u8; 10] = [0; 10]; // номера доступных ком-портов, всего не более 10
 
     // Сканирование доступных COM-портов
-    let _ports_count = scan_available_ports(&mut available_ports);
+    let ports_count = scan_available_ports(&mut available_ports);
+    
+    // Выбор COM-порта пользователем
+    let tty_path = match select_com_port(&available_ports, ports_count)? {
+        Some(port) => port,
+        None => {
+            wait_for_enter()?;
+            return Ok(());
+        }
+    };
     
     // Настройка параметров последовательного порта
-    let tty_path = "COM7";
-    let builder = tokio_serial::new(tty_path, 115200)
+    let builder = tokio_serial::new(&tty_path, 115200)
         .data_bits(tokio_serial::DataBits::Eight)
         .parity(tokio_serial::Parity::None)
         .stop_bits(tokio_serial::StopBits::One);
