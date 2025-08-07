@@ -1,0 +1,9 @@
+[package]
+name = "test_modbus_v1r1"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio-modbus = { version = "0.7", features = ["rtu"] }
+tokio-serial = "5.4"
+tokio = { version = "1.0", features = ["full"] }
