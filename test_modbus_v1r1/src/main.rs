@@ -135,6 +135,33 @@ fn select_com_port(available_ports: &[u8; 10], ports_count: usize) -> io::Result
     }
 }
 
+/// Функция выбора адреса устройства
+fn select_device_address() -> io::Result<u8> {
+    println!("\n{}", "Выбор адреса устройства Modbus".cyan());
+    println!("Допустимый диапазон: 1-240");
+    
+    loop {
+        print!("\nВведите адрес устройства (1-240): ");
+        io::stdout().flush()?;
+        
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        
+        match input.trim().parse::<u8>() {
+            Ok(address) if address >= 1 && address <= 240 => {
+                println!("{}", format!("Выбран адрес устройства: {}", address).green());
+                return Ok(address);
+            }
+            Ok(address) => {
+                println!("{}", format!("Недопустимый адрес: {}! Введите значение от 1 до 240.", address).red());
+            }
+            Err(_) => {
+                println!("{}", "Неверный формат! Введите число от 1 до 240.".red());
+            }
+        }
+    }
+}
+
 /// Функция ожидания нажатия Enter для завершения программы
 fn wait_for_enter() -> io::Result<()> {
     println!("\nНажмите Enter для завершения программы...");
@@ -171,6 +198,9 @@ async fn main() -> io::Result<()> {
         }
     };
     
+    // Выбор адреса устройства
+    let device_address = select_device_address()?;
+    
     // Настройка параметров последовательного порта
     let builder = tokio_serial::new(&tty_path, 115200)
         .data_bits(tokio_serial::DataBits::Eight)
@@ -204,7 +234,7 @@ async fn main() -> io::Result<()> {
     };
 
     // Параметры запроса
-    let slave_addr = Slave(1); // Адрес устройства
+    let slave_addr = Slave(device_address); // Адрес устройства
     let register_addr = 21; // Номер регистра
     let quantity = 1; // Количество регистров для чтения
 
