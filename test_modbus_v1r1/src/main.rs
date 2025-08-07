@@ -13,6 +13,11 @@ use winapi::um::winbase::{STD_OUTPUT_HANDLE, STD_ERROR_HANDLE};
 #[cfg(windows)]
 const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x0004;
 
+/// Доступные скорости передачи данных для RS-485 (в бодах)
+const AVAILABLE_BAUD_RATES: (u32, u32, u32, u32, u32, u32, u32) = (
+    2400, 4800, 9600, 19200, 38400, 57600, 115200
+);
+
 /// Включение поддержки цветного вывода в Windows
 #[cfg(windows)]
 fn enable_ansi_support() {
@@ -162,6 +167,52 @@ fn select_device_address() -> io::Result<u8> {
     }
 }
 
+/// Функция выбора скорости передачи данных
+fn select_baud_rate() -> io::Result<u32> {
+    println!("\n{}", "Выбор скорости передачи данных RS-485".cyan());
+    println!("Доступные скорости:");
+    
+    // Показываем список доступных скоростей
+    println!("  1. {} бод", AVAILABLE_BAUD_RATES.0);
+    println!("  2. {} бод", AVAILABLE_BAUD_RATES.1);
+    println!("  3. {} бод", AVAILABLE_BAUD_RATES.2);
+    println!("  4. {} бод", AVAILABLE_BAUD_RATES.3);
+    println!("  5. {} бод", AVAILABLE_BAUD_RATES.4);
+    println!("  6. {} бод", AVAILABLE_BAUD_RATES.5);
+    println!("  7. {} бод", AVAILABLE_BAUD_RATES.6);
+    
+    loop {
+        print!("\nВведите номер скорости (1-7): ");
+        io::stdout().flush()?;
+        
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        
+        match input.trim().parse::<u8>() {
+            Ok(choice) if choice >= 1 && choice <= 7 => {
+                let selected_baud = match choice {
+                    1 => AVAILABLE_BAUD_RATES.0,
+                    2 => AVAILABLE_BAUD_RATES.1,
+                    3 => AVAILABLE_BAUD_RATES.2,
+                    4 => AVAILABLE_BAUD_RATES.3,
+                    5 => AVAILABLE_BAUD_RATES.4,
+                    6 => AVAILABLE_BAUD_RATES.5,
+                    7 => AVAILABLE_BAUD_RATES.6,
+                    _ => unreachable!(), // Этого никогда не произойдет из-за проверки выше
+                };
+                println!("{}", format!("Выбрана скорость: {} бод", selected_baud).green());
+                return Ok(selected_baud);
+            }
+            Ok(choice) => {
+                println!("{}", format!("Недопустимый выбор: {}! Введите число от 1 до 7.", choice).red());
+            }
+            Err(_) => {
+                println!("{}", "Неверный формат! Введите число от 1 до 7.".red());
+            }
+        }
+    }
+}
+
 /// Функция ожидания нажатия Enter для завершения программы
 fn wait_for_enter() -> io::Result<()> {
     println!("\nНажмите Enter для завершения программы...");
@@ -201,8 +252,11 @@ async fn main() -> io::Result<()> {
     // Выбор адреса устройства
     let device_address = select_device_address()?;
     
+    // Выбор скорости передачи данных
+    let baud_rate = select_baud_rate()?;
+    
     // Настройка параметров последовательного порта
-    let builder = tokio_serial::new(&tty_path, 115200)
+    let builder = tokio_serial::new(&tty_path, baud_rate)
         .data_bits(tokio_serial::DataBits::Eight)
         .parity(tokio_serial::Parity::None)
         .stop_bits(tokio_serial::StopBits::One);
