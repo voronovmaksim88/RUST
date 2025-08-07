@@ -2,6 +2,7 @@ use tokio_modbus::prelude::*;
 use tokio_serial::{SerialStream};
 use std::io;
 use colored::*;
+use serialport;
 
 #[cfg(windows)]
 use winapi::um::consoleapi::{GetConsoleMode, SetConsoleMode};
@@ -37,6 +38,40 @@ fn enable_ansi_support() {
     // На Unix-системах цветной вывод работает по умолчанию
 }
 
+/// Функция сканирования доступных COM-портов
+fn scan_available_ports(available_ports: &mut [u8; 10]) -> usize {
+    let mut count = 0;
+    
+    println!("Сканирование доступных COM-портов...");
+    
+    match serialport::available_ports() {
+        Ok(ports) => {
+            for port in ports {
+                if let Some(port_name) = port.port_name.strip_prefix("COM") {
+                    if let Ok(port_num) = port_name.parse::<u8>() {
+                        if count < 10 {
+                            available_ports[count] = port_num;
+                            println!("  Найден: COM{}", port_num);
+                            count += 1;
+                        }
+                    }
+                }
+            }
+            
+            if count == 0 {
+                println!("{}", "  COM-порты не найдены".yellow());
+            } else {
+                println!("{}", format!("  Всего найдено портов: {}", count).cyan());
+            }
+        }
+        Err(e) => {
+            eprintln!("{}", format!("Ошибка сканирования портов: {:?}", e).red());
+        }
+    }
+    
+    count
+}
+
 /// Функция ожидания нажатия Enter для завершения программы
 fn wait_for_enter() -> io::Result<()> {
     println!("\nНажмите Enter для завершения программы...");
@@ -49,6 +84,11 @@ fn wait_for_enter() -> io::Result<()> {
 async fn main() -> io::Result<()> {
     // Включение поддержки цветного вывода в Windows
     enable_ansi_support();
+
+    let mut available_ports: [u8; 10] = [0; 10]; // номера доступных ком-портов, всего не более 10
+
+    // Сканирование доступных COM-портов
+    let _ports_count = scan_available_ports(&mut available_ports);
     
     // Настройка параметров последовательного порта
     let tty_path = "COM7";
