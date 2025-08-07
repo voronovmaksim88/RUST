@@ -72,10 +72,39 @@ fn scan_available_ports(available_ports: &mut [u8; 10]) -> usize {
     count
 }
 
+/// Функция обработки отсутствия портов
+fn handle_no_ports() -> io::Result<bool> {
+    println!("{}", "Доступные COM-порты не найдены!".red());
+    println!("\n{}", "Выберите действие:".yellow());
+    println!("  {} - выйти", "0".red());
+    println!("  {} - повторить поиск", "1".green());
+    
+    loop {
+        print!("\nВаш выбор (0-1): ");
+        io::stdout().flush()?;
+        
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        
+        match input.trim().parse::<u8>() {
+            Ok(0) => {
+                println!("{}", "Выход из программы...".yellow());
+                return Ok(false); // false = выйти
+            }
+            Ok(1) => {
+                println!("{}", "Повторяем поиск портов...".cyan());
+                return Ok(true); // true = повторить поиск
+            }
+            _ => {
+                println!("{}", "Неверный выбор! Введите 0 для выхода или 1 для повторного поиска.".red());
+            }
+        }
+    }
+}
+
 /// Функция выбора COM-порта пользователем
 fn select_com_port(available_ports: &[u8; 10], ports_count: usize) -> io::Result<Option<String>> {
     if ports_count == 0 {
-        println!("{}", "Доступные COM-порты не найдены!".red());
         return Ok(None);
     }
     
@@ -121,15 +150,24 @@ async fn main() -> io::Result<()> {
 
     let mut available_ports: [u8; 10] = [0; 10]; // номера доступных ком-портов, всего не более 10
 
-    // Сканирование доступных COM-портов
-    let ports_count = scan_available_ports(&mut available_ports);
-    
-    // Выбор COM-порта пользователем
-    let tty_path = match select_com_port(&available_ports, ports_count)? {
-        Some(port) => port,
-        None => {
-            wait_for_enter()?;
-            return Ok(());
+    // Цикл поиска и выбора порта
+    let tty_path = loop {
+        // Сканирование доступных COM-портов
+        let ports_count = scan_available_ports(&mut available_ports);
+        
+        // Выбор COM-порта пользователем
+        match select_com_port(&available_ports, ports_count)? {
+            Some(port) => break port, // Порт выбран, выходим из цикла
+            None => {
+                // Портов нет, спрашиваем пользователя что делать
+                if !handle_no_ports()? {
+                    // Пользователь выбрал выход
+                    wait_for_enter()?;
+                    return Ok(());
+                }
+                // Пользователь выбрал повторить поиск, продолжаем цикл
+                println!(); // Пустая строка для разделения
+            }
         }
     };
     
