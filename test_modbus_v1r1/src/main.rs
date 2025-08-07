@@ -1,6 +1,7 @@
 use tokio_modbus::prelude::*;
 use tokio_serial::{SerialStream};
 use std::io::{self, Write};
+use std::time::Duration;
 use colored::*;
 use serialport;
 
@@ -17,6 +18,9 @@ const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x0004;
 const AVAILABLE_BAUD_RATES: (u32, u32, u32, u32, u32, u32, u32) = (
     2400, 4800, 9600, 19200, 38400, 57600, 115200
 );
+
+/// Доступные варианты четности для RS-485
+const PARITY_OPTIONS: (&str, &str, &str) = ("None", "Even", "Odd");
 
 /// Включение поддержки цветного вывода в Windows
 #[cfg(windows)]
@@ -213,6 +217,44 @@ fn select_baud_rate() -> io::Result<u32> {
     }
 }
 
+/// Функция выбора четности
+fn select_parity() -> io::Result<tokio_serial::Parity> {
+    println!("\n{}", "Выбор четности для RS-485".cyan());
+    println!("Доступные варианты четности:");
+    
+    // Показываем список доступных вариантов четности
+    println!("  1. {} - без контроля четности", PARITY_OPTIONS.0);
+    println!("  2. {} - четная четность", PARITY_OPTIONS.1);
+    println!("  3. {} - нечетная четность", PARITY_OPTIONS.2);
+    
+    loop {
+        print!("\nВведите номер четности (1-3): ");
+        io::stdout().flush()?;
+        
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        
+        match input.trim().parse::<u8>() {
+            Ok(choice) if choice >= 1 && choice <= 3 => {
+                let (selected_parity, parity_name) = match choice {
+                    1 => (tokio_serial::Parity::None, PARITY_OPTIONS.0),
+                    2 => (tokio_serial::Parity::Even, PARITY_OPTIONS.1),
+                    3 => (tokio_serial::Parity::Odd, PARITY_OPTIONS.2),
+                    _ => unreachable!(), // Этого никогда не произойдет из-за проверки выше
+                };
+                println!("{}", format!("Выбрана четность: {}", parity_name).green());
+                return Ok(selected_parity);
+            }
+            Ok(choice) => {
+                println!("{}", format!("Недопустимый выбор: {}! Введите число от 1 до 3.", choice).red());
+            }
+            Err(_) => {
+                println!("{}", "Неверный формат! Введите число от 1 до 3.".red());
+            }
+        }
+    }
+}
+
 /// Функция ожидания нажатия Enter для завершения программы
 fn wait_for_enter() -> io::Result<()> {
     println!("\nНажмите Enter для завершения программы...");
@@ -255,10 +297,13 @@ async fn main() -> io::Result<()> {
     // Выбор скорости передачи данных
     let baud_rate = select_baud_rate()?;
     
+    // Выбор четности
+    let parity = select_parity()?;
+    
     // Настройка параметров последовательного порта
     let builder = tokio_serial::new(&tty_path, baud_rate)
         .data_bits(tokio_serial::DataBits::Eight)
-        .parity(tokio_serial::Parity::None)
+        .parity(parity)
         .stop_bits(tokio_serial::StopBits::One);
 
     // Открытие последовательного порта
@@ -295,14 +340,21 @@ async fn main() -> io::Result<()> {
     // Установка адреса устройства
     ctx.set_slave(slave_addr);
 
-    // Чтение входных регистров (функция 04)
-    match ctx.read_input_registers(register_addr, quantity).await {
-        Ok(data) => {
+    // Чтение входных регистров (функция 04) с таймаутом 1000 мс
+    let timeout_duration = Duration::from_millis(1000);
+    match tokio::time::timeout(timeout_duration, ctx.read_input_registers(register_addr, quantity)).await {
+        Ok(Ok(data)) => {
             println!("{}", format!("Прочитанное значение регистра {}: {}", register_addr, data[0]).green());
         }
-        Err(e) => {
+        Ok(Err(e)) => {
             eprintln!("{}", format!("Ошибка чтения регистра: {:?}", e).red());
             // Ожидание нажатия Enter в случае ошибки
+            wait_for_enter()?;
+            return Ok(());
+        }
+        Err(_) => {
+            eprintln!("{}", "Таймаут операции чтения (1000 мс)! Проверьте настройки связи (скорость, четность, адрес устройства).".red());
+            // Ожидание нажатия Enter в случае таймаута
             wait_for_enter()?;
             return Ok(());
         }
