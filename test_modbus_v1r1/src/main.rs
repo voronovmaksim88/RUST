@@ -331,7 +331,8 @@ fn load_settings() -> io::Result<Config> {
 
 /// Функция отображения настроек связи
 fn show_connection_settings() -> io::Result<()> {
-    println!("\n{}", "=== Текущие настройки связи ===".cyan().bold());
+    clear_screen();
+    println!("{}", "=== Текущие настройки связи ===".cyan().bold());
     
     match load_settings() {
         Ok(config) => {
@@ -362,6 +363,12 @@ fn show_connection_settings() -> io::Result<()> {
     Ok(())
 }
 
+/// Функция очистки экрана консоли
+fn clear_screen() {
+    print!("\x1B[2J\x1B[1;1H");
+    io::stdout().flush().unwrap();
+}
+
 /// Функция ожидания нажатия Enter для продолжения
 fn wait_for_continue() -> io::Result<()> {
     println!("\n{}", "Нажмите Enter для продолжения...".bright_black());
@@ -380,6 +387,7 @@ fn wait_for_enter() -> io::Result<()> {
 
 /// Функция отображения главного меню
 fn show_main_menu() -> io::Result<u8> {
+    clear_screen();
     println!("{}", "=== Modbus RTU Client ===".cyan().bold());
     println!("\n{}", "Выберите действие:".yellow());
     println!("  {} - Показать настройки связи", "1".green());
