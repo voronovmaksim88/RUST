@@ -2,8 +2,10 @@ use tokio_modbus::prelude::*;
 use tokio_serial::{SerialStream};
 use std::io::{self, Write};
 use std::time::Duration;
+use std::fs;
 use colored::*;
 use serialport;
+use serde::{Deserialize, Serialize};
 
 #[cfg(windows)]
 use winapi::um::consoleapi::{GetConsoleMode, SetConsoleMode};
@@ -24,6 +26,31 @@ const PARITY_OPTIONS: (&str, &str, &str) = ("None", "Even", "Odd");
 
 /// Доступные варианты стоп-битов для RS-485
 const STOP_BITS_OPTIONS: (&str, &str) = ("1 стоп-бит", "2 стоп-бита");
+
+/// Структура для хранения настроек подключения
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct ConnectionSettings {
+    port: String,
+    device_address: u8,
+    baud_rate: u32,
+    parity: String,
+    stop_bits: u8,
+}
+
+/// Структура для метаданных
+#[derive(Serialize, Deserialize, Debug)]
+struct Metadata {
+    last_updated: String,
+    version: String,
+    description: String,
+}
+
+/// Основная структура конфигурации
+#[derive(Serialize, Deserialize, Debug)]
+struct Config {
+    connection: ConnectionSettings,
+    metadata: Metadata,
+}
 
 /// Включение поддержки цветного вывода в Windows
 #[cfg(windows)]
@@ -294,6 +321,47 @@ fn select_stop_bits() -> io::Result<tokio_serial::StopBits> {
     }
 }
 
+/// Функция загрузки настроек из JSON файла
+fn load_settings() -> io::Result<Config> {
+    let file_content = fs::read_to_string("src/connect_settings.json")?;
+    let config: Config = serde_json::from_str(&file_content)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    Ok(config)
+}
+
+/// Функция отображения настроек связи
+fn show_connection_settings() -> io::Result<()> {
+    println!("\n{}", "=== Текущие настройки связи ===".cyan().bold());
+    
+    match load_settings() {
+        Ok(config) => {
+            let conn = &config.connection;
+            println!("\n{}", "Параметры подключения:".yellow());
+            println!("  {} {}", "COM-порт:".green(), conn.port.bright_white());
+            println!("  {} {}", "Адрес устройства:".green(), conn.device_address.to_string().bright_white());
+            println!("  {} {} бод", "Скорость:".green(), conn.baud_rate.to_string().bright_white());
+            println!("  {} {}", "Четность:".green(), conn.parity.bright_white());
+            
+            let stop_bits_text = match conn.stop_bits {
+                1 => "1 стоп-бит",
+                2 => "2 стоп-бита",
+                _ => "неизвестно",
+            };
+            println!("  {} {}", "Стоп-биты:".green(), stop_bits_text.bright_white());
+            
+            println!("\n{}", "Информация о файле:".yellow());
+            println!("  {} {}", "Версия:".blue(), config.metadata.version.bright_white());
+            println!("  {} {}", "Обновлен:".blue(), config.metadata.last_updated.bright_white());
+        }
+        Err(e) => {
+            eprintln!("{}", format!("Ошибка загрузки настроек: {}", e).red());
+            println!("{}", "Будут использованы настройки по умолчанию.".yellow());
+        }
+    }
+    
+    Ok(())
+}
+
 /// Функция ожидания нажатия Enter для завершения программы
 fn wait_for_enter() -> io::Result<()> {
     println!("\nНажмите Enter для завершения программы...");
@@ -302,12 +370,8 @@ fn wait_for_enter() -> io::Result<()> {
     Ok(())
 }
 
-#[tokio::main]
-async fn main() -> io::Result<()> {
-    // Включение поддержки цветного вывода в Windows
-    enable_ansi_support();
-
-    // Главное меню программы
+/// Функция отображения главного меню
+fn show_main_menu() -> io::Result<u8> {
     println!("{}", "=== Modbus RTU Client ===".cyan().bold());
     println!("\n{}", "Выберите действие:".yellow());
     println!("  {} - Показать настройки связи", "1".green());
@@ -321,12 +385,40 @@ async fn main() -> io::Result<()> {
     io::stdin().read_line(&mut input)?;
     
     match input.trim().parse::<u8>() {
-        Ok(choice) if choice >= 1 && choice <= 3 => {
-            println!("{}", format!("Выбрано: пункт {}", choice).cyan());
-            // TODO: Реализация каждого пункта меню будет добавлена позже
-        }
+        Ok(choice) if choice >= 1 && choice <= 3 => Ok(choice),
         _ => {
             println!("{}", "Неверный выбор! Используется пункт 3 по умолчанию.".yellow());
+            Ok(3)
+        }
+    }
+}
+
+#[tokio::main]
+async fn main() -> io::Result<()> {
+    // Включение поддержки цветного вывода в Windows
+    enable_ansi_support();
+
+    // Главный цикл программы
+    loop {
+        let choice = show_main_menu()?;
+        
+        match choice {
+            1 => {
+                // Показать настройки связи
+                show_connection_settings()?;
+                println!(); // Пустая строка для разделения
+                continue; // Возвращаемся к главному меню
+            }
+            2 => {
+                println!("{}", "Пункт 2: Изменить настройки связи (пока не реализован)".cyan());
+                // TODO: Реализация изменения настроек
+                break; // Пока что выходим из цикла
+            }
+            3 => {
+                println!("{}", "Пункт 3: Начать опрос".cyan());
+                break; // Выходим из цикла и продолжаем выполнение
+            }
+            _ => unreachable!(), // Этого не произойдет из-за проверки в show_main_menu
         }
     }
     
