@@ -601,7 +601,7 @@ async fn start_polling() -> io::Result<()> {
                 error_count += 1;
                 println!("{} {}", 
                     format!("Ошибка: {:?}", e).red(),
-                    format!("(неудач: {})", error_count).yellow()
+                    format!("(error_count: {})", error_count).yellow()
                 );
             }
             Err(_) => {
@@ -609,7 +609,7 @@ async fn start_polling() -> io::Result<()> {
                 error_count += 1;
                 println!("{} {}", 
                     "Таймаут!".red(),
-                    format!("(неудач: {})", error_count).yellow()
+                    format!("(error_count: {})", error_count).yellow()
                 );
             }
         }
