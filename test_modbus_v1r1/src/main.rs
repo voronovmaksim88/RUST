@@ -362,6 +362,14 @@ fn show_connection_settings() -> io::Result<()> {
     Ok(())
 }
 
+/// Функция ожидания нажатия Enter для продолжения
+fn wait_for_continue() -> io::Result<()> {
+    println!("\n{}", "Нажмите Enter для продолжения...".bright_black());
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    Ok(())
+}
+
 /// Функция ожидания нажатия Enter для завершения программы
 fn wait_for_enter() -> io::Result<()> {
     println!("\nНажмите Enter для завершения программы...");
@@ -406,6 +414,7 @@ async fn main() -> io::Result<()> {
             1 => {
                 // Показать настройки связи
                 show_connection_settings()?;
+                wait_for_continue()?;
                 println!(); // Пустая строка для разделения
                 continue; // Возвращаемся к главному меню
             }
