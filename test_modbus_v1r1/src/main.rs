@@ -22,6 +22,9 @@ const AVAILABLE_BAUD_RATES: (u32, u32, u32, u32, u32, u32, u32) = (
 /// Доступные варианты четности для RS-485
 const PARITY_OPTIONS: (&str, &str, &str) = ("None", "Even", "Odd");
 
+/// Доступные варианты стоп-битов для RS-485
+const STOP_BITS_OPTIONS: (&str, &str) = ("1 стоп-бит", "2 стоп-бита");
+
 /// Включение поддержки цветного вывода в Windows
 #[cfg(windows)]
 fn enable_ansi_support() {
@@ -255,6 +258,42 @@ fn select_parity() -> io::Result<tokio_serial::Parity> {
     }
 }
 
+/// Функция выбора количества стоп-битов
+fn select_stop_bits() -> io::Result<tokio_serial::StopBits> {
+    println!("\n{}", "Выбор количества стоп-битов для RS-485".cyan());
+    println!("Доступные варианты:");
+    
+    // Показываем список доступных вариантов стоп-битов
+    println!("  1. {} (стандартная настройка)", STOP_BITS_OPTIONS.0);
+    println!("  2. {} (повышенная надежность)", STOP_BITS_OPTIONS.1);
+    
+    loop {
+        print!("\nВведите номер стоп-битов (1-2): ");
+        io::stdout().flush()?;
+        
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        
+        match input.trim().parse::<u8>() {
+            Ok(choice) if choice >= 1 && choice <= 2 => {
+                let (selected_stop_bits, stop_bits_name) = match choice {
+                    1 => (tokio_serial::StopBits::One, STOP_BITS_OPTIONS.0),
+                    2 => (tokio_serial::StopBits::Two, STOP_BITS_OPTIONS.1),
+                    _ => unreachable!(), // Этого никогда не произойдет из-за проверки выше
+                };
+                println!("{}", format!("Выбрано: {}", stop_bits_name).green());
+                return Ok(selected_stop_bits);
+            }
+            Ok(choice) => {
+                println!("{}", format!("Недопустимый выбор: {}! Введите число от 1 до 2.", choice).red());
+            }
+            Err(_) => {
+                println!("{}", "Неверный формат! Введите число от 1 до 2.".red());
+            }
+        }
+    }
+}
+
 /// Функция ожидания нажатия Enter для завершения программы
 fn wait_for_enter() -> io::Result<()> {
     println!("\nНажмите Enter для завершения программы...");
@@ -300,11 +339,14 @@ async fn main() -> io::Result<()> {
     // Выбор четности
     let parity = select_parity()?;
     
+    // Выбор количества стоп-битов
+    let stop_bits = select_stop_bits()?;
+    
     // Настройка параметров последовательного порта
     let builder = tokio_serial::new(&tty_path, baud_rate)
         .data_bits(tokio_serial::DataBits::Eight)
         .parity(parity)
-        .stop_bits(tokio_serial::StopBits::One);
+        .stop_bits(stop_bits);
 
     // Открытие последовательного порта
     let port = match SerialStream::open(&builder) {
