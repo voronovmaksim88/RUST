@@ -4,9 +4,7 @@
     "device_address": 1,
     "baud_rate": 115200,
     "parity": "None",
-    "stop_bits": 1,
-    "register_address": 21,
-    "quantity": 1
+    "stop_bits": 1
   },
   "metadata": {
     "last_updated": "2024-01-01T00:00:00Z",
