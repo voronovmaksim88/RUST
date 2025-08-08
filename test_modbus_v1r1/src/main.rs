@@ -321,9 +321,32 @@ fn select_stop_bits() -> io::Result<tokio_serial::StopBits> {
     }
 }
 
+/// Функция получения пути к файлу настроек
+fn get_settings_path() -> String {
+    // В режиме разработки (cargo run) - в корне проекта
+    // В режиме release (exe файл) - рядом с exe файлом
+    if cfg!(debug_assertions) {
+        // Режим разработки - файл в корне проекта
+        "connect_settings.json".to_string()
+    } else {
+        // Режим release - файл рядом с exe
+        match std::env::current_exe() {
+            Ok(exe_path) => {
+                if let Some(exe_dir) = exe_path.parent() {
+                    exe_dir.join("connect_settings.json").to_string_lossy().to_string()
+                } else {
+                    "connect_settings.json".to_string()
+                }
+            }
+            Err(_) => "connect_settings.json".to_string()
+        }
+    }
+}
+
 /// Функция загрузки настроек из JSON файла
 fn load_settings() -> io::Result<Config> {
-    let file_content = fs::read_to_string("src/connect_settings.json")?;
+    let settings_path = get_settings_path();
+    let file_content = fs::read_to_string(&settings_path)?;
     let config: Config = serde_json::from_str(&file_content)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     Ok(config)
@@ -345,7 +368,8 @@ fn save_settings(connection: ConnectionSettings) -> io::Result<()> {
     let json_content = serde_json::to_string_pretty(&config)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     
-    fs::write("src/connect_settings.json", json_content)?;
+    let settings_path = get_settings_path();
+    fs::write(&settings_path, json_content)?;
     Ok(())
 }
 
@@ -467,12 +491,122 @@ fn change_connection_settings() -> io::Result<()> {
     Ok(())
 }
 
-/// Функция ожидания нажатия Enter для завершения программы
-fn wait_for_enter() -> io::Result<()> {
-    println!("\nНажмите Enter для завершения программы...");
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    Ok(())
+/// Функция запуска опроса с использованием сохраненных настроек
+async fn start_polling() -> io::Result<()> {
+    clear_screen();
+    println!("{}", "=== Запуск опроса устройства ===".cyan().bold());
+    
+    // Загрузка настроек из файла
+    let config = match load_settings() {
+        Ok(config) => {
+            println!("{}", "Настройки успешно загружены из файла".green());
+            config
+        }
+        Err(e) => {
+            eprintln!("{}", format!("Ошибка загрузки настроек: {}", e).red());
+            println!("{}", "Убедитесь, что настройки сохранены (пункт 2 в главном меню)".yellow());
+            return Err(e);
+        }
+    };
+    
+    let conn = &config.connection;
+    println!("Используемые настройки:");
+    println!("  COM-порт: {}", conn.port.bright_white());
+    println!("  Адрес устройства: {}", conn.device_address.to_string().bright_white());
+    println!("  Скорость: {} бод", conn.baud_rate.to_string().bright_white());
+    println!("  Четность: {}", conn.parity.bright_white());
+    
+    let stop_bits_text = match conn.stop_bits {
+        1 => "1 стоп-бит",
+        2 => "2 стоп-бита",
+        _ => "неизвестно",
+    };
+    println!("  Стоп-биты: {}", stop_bits_text.bright_white());
+    println!();
+    
+    // Преобразование настроек для tokio_serial
+    let parity = match conn.parity.as_str() {
+        "None" => tokio_serial::Parity::None,
+        "Even" => tokio_serial::Parity::Even,
+        "Odd" => tokio_serial::Parity::Odd,
+        _ => tokio_serial::Parity::None,
+    };
+    
+    let stop_bits = match conn.stop_bits {
+        1 => tokio_serial::StopBits::One,
+        2 => tokio_serial::StopBits::Two,
+        _ => tokio_serial::StopBits::One,
+    };
+    
+    // Настройка параметров последовательного порта
+    let builder = tokio_serial::new(&conn.port, conn.baud_rate)
+        .data_bits(tokio_serial::DataBits::Eight)
+        .parity(parity)
+        .stop_bits(stop_bits);
+    
+    // Открытие последовательного порта
+    let port = match SerialStream::open(&builder) {
+        Ok(port) => {
+            println!("{}", format!("Последовательный порт {} успешно открыт", conn.port).green());
+            port
+        }
+        Err(e) => {
+            eprintln!("{}", format!("Ошибка открытия последовательного порта {}: {:?}", conn.port, e).red());
+            return Err(e.into());
+        }
+    };
+    
+    // Создание контекста Modbus RTU
+    let mut ctx = match rtu::connect(port).await {
+        Ok(ctx) => {
+            println!("{}", "Modbus RTU контекст успешно создан".green());
+            ctx
+        }
+        Err(e) => {
+            eprintln!("{}", format!("Ошибка создания Modbus RTU контекста: {:?}", e).red());
+            return Err(e.into());
+        }
+    };
+    
+    // Параметры запроса
+    let slave_addr = Slave(conn.device_address);
+    let register_addr = 21; // Номер регистра
+    let quantity = 1; // Количество регистров для чтения
+    
+    // Установка адреса устройства
+    ctx.set_slave(slave_addr);
+    
+    // Циклический опрос устройства каждую секунду
+    println!("{}", "Начинается циклический опрос устройства (каждую секунду)...".cyan());
+    println!("{}", "Нажмите Ctrl+C для остановки опроса".yellow());
+    println!();
+    
+    let timeout_duration = Duration::from_millis(1000);
+    let mut poll_count = 0;
+    
+    loop {
+        poll_count += 1;
+        
+        // Показываем время и номер опроса
+        let timestamp = chrono::Local::now().format("%H:%M:%S");
+        print!("{} [{}] ", timestamp.to_string().bright_black(), poll_count.to_string().cyan());
+        
+        // Чтение входных регистров (функция 04) с таймаутом 1000 мс
+        match tokio::time::timeout(timeout_duration, ctx.read_input_registers(register_addr, quantity)).await {
+            Ok(Ok(data)) => {
+                println!("{}", format!("Регистр {}: {}", register_addr, data[0]).green());
+            }
+            Ok(Err(e)) => {
+                println!("{}", format!("Ошибка: {:?}", e).red());
+            }
+            Err(_) => {
+                println!("{}", "Таймаут!".red());
+            }
+        }
+        
+        // Ожидание 1 секунды перед следующим опросом
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
 }
 
 /// Функция отображения главного меню
@@ -524,8 +658,15 @@ async fn main() -> io::Result<()> {
                 continue; // Возвращаемся к главному меню
             }
             3 => {
-                println!("{}", "Пункт 3: Начать опрос".cyan());
-                break; // Выходим из цикла и продолжаем выполнение
+                // Начать опрос с использованием сохраненных настроек
+                match start_polling().await {
+                    Ok(()) => return Ok(()),
+                    Err(e) => {
+                        eprintln!("{}", format!("Ошибка при опросе: {}", e).red());
+                        wait_for_continue()?;
+                        continue; // Возвращаемся к главному меню
+                    }
+                }
             }
             9 => {
                 println!("{}", "Завершение программы...".yellow());
@@ -534,106 +675,4 @@ async fn main() -> io::Result<()> {
             _ => unreachable!(), // Этого не произойдет из-за проверки в show_main_menu
         }
     }
-    
-    println!(); // Пустая строка для разделения
-
-    let mut available_ports: [u8; 10] = [0; 10]; // номера доступных ком-портов, всего не более 10
-
-    // Цикл поиска и выбора порта
-    let tty_path = loop {
-        // Сканирование доступных COM-портов
-        let ports_count = scan_available_ports(&mut available_ports);
-        
-        // Выбор COM-порта пользователем
-        match select_com_port(&available_ports, ports_count)? {
-            Some(port) => break port, // Порт выбран, выходим из цикла
-            None => {
-                // Портов нет, спрашиваем пользователя что делать
-                if !handle_no_ports()? {
-                    // Пользователь выбрал выход
-                    wait_for_enter()?;
-                    return Ok(());
-                }
-                // Пользователь выбрал повторить поиск, продолжаем цикл
-                println!(); // Пустая строка для разделения
-            }
-        }
-    };
-    
-    // Выбор адреса устройства
-    let device_address = select_device_address()?;
-    
-    // Выбор скорости передачи данных
-    let baud_rate = select_baud_rate()?;
-    
-    // Выбор четности
-    let parity = select_parity()?;
-    
-    // Выбор количества стоп-битов
-    let stop_bits = select_stop_bits()?;
-    
-    // Настройка параметров последовательного порта
-    let builder = tokio_serial::new(&tty_path, baud_rate)
-        .data_bits(tokio_serial::DataBits::Eight)
-        .parity(parity)
-        .stop_bits(stop_bits);
-
-    // Открытие последовательного порта
-    let port = match SerialStream::open(&builder) {
-        Ok(port) => {
-            println!("Последовательный порт {} успешно открыт", tty_path);
-            port
-        }
-        Err(e) => {
-            eprintln!("{}", format!("Ошибка открытия последовательного порта {}: {:?}", tty_path, e).red());
-            wait_for_enter()?;
-            return Ok(());
-        }
-    };
-
-    // Создание контекста Modbus RTU
-    let mut ctx = match rtu::connect(port).await {
-        Ok(ctx) => {
-            println!("Modbus RTU контекст успешно создан");
-            ctx
-        }
-        Err(e) => {
-            eprintln!("{}", format!("Ошибка создания Modbus RTU контекста: {:?}", e).red());
-            wait_for_enter()?;
-            return Ok(());
-        }
-    };
-
-    // Параметры запроса
-    let slave_addr = Slave(device_address); // Адрес устройства
-    let register_addr = 21; // Номер регистра
-    let quantity = 1; // Количество регистров для чтения
-
-    // Установка адреса устройства
-    ctx.set_slave(slave_addr);
-
-    // Чтение входных регистров (функция 04) с таймаутом 1000 мс
-    let timeout_duration = Duration::from_millis(1000);
-    match tokio::time::timeout(timeout_duration, ctx.read_input_registers(register_addr, quantity)).await {
-        Ok(Ok(data)) => {
-            println!("{}", format!("Прочитанное значение регистра {}: {}", register_addr, data[0]).green());
-        }
-        Ok(Err(e)) => {
-            eprintln!("{}", format!("Ошибка чтения регистра: {:?}", e).red());
-            // Ожидание нажатия Enter в случае ошибки
-            wait_for_enter()?;
-            return Ok(());
-        }
-        Err(_) => {
-            eprintln!("{}", "Таймаут операции чтения (1000 мс)! Проверьте настройки связи (скорость, четность, адрес устройства).".red());
-            // Ожидание нажатия Enter в случае таймаута
-            wait_for_enter()?;
-            return Ok(());
-        }
-    }
-
-    // Ожидание нажатия Enter для завершения программы
-    wait_for_enter()?;
-
-    Ok(())
 }
