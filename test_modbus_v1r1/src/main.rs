@@ -307,6 +307,31 @@ async fn main() -> io::Result<()> {
     // Включение поддержки цветного вывода в Windows
     enable_ansi_support();
 
+    // Главное меню программы
+    println!("{}", "=== Modbus RTU Client ===".cyan().bold());
+    println!("\n{}", "Выберите действие:".yellow());
+    println!("  {} - Показать настройки связи", "1".green());
+    println!("  {} - Изменить настройки связи", "2".blue());
+    println!("  {} - Начать опрос", "3".magenta());
+    
+    print!("\nВаш выбор (1-3): ");
+    io::stdout().flush()?;
+    
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    
+    match input.trim().parse::<u8>() {
+        Ok(choice) if choice >= 1 && choice <= 3 => {
+            println!("{}", format!("Выбрано: пункт {}", choice).cyan());
+            // TODO: Реализация каждого пункта меню будет добавлена позже
+        }
+        _ => {
+            println!("{}", "Неверный выбор! Используется пункт 3 по умолчанию.".yellow());
+        }
+    }
+    
+    println!(); // Пустая строка для разделения
+
     let mut available_ports: [u8; 10] = [0; 10]; // номера доступных ком-портов, всего не более 10
 
     // Цикл поиска и выбора порта
