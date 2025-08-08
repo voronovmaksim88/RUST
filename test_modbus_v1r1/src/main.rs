@@ -176,14 +176,14 @@ fn select_baud_rate() -> io::Result<u32> {
     println!("\n{}", "Выбор скорости передачи данных RS-485".cyan());
     println!("Доступные скорости:");
     
-    // Показываем список доступных скоростей
-    println!("  1. {} бод", AVAILABLE_BAUD_RATES.0);
-    println!("  2. {} бод", AVAILABLE_BAUD_RATES.1);
-    println!("  3. {} бод", AVAILABLE_BAUD_RATES.2);
+    // Показываем список доступных скоростей в обратном порядке (от большей к меньшей)
+    println!("  1. {} бод", AVAILABLE_BAUD_RATES.6);
+    println!("  2. {} бод", AVAILABLE_BAUD_RATES.5);
+    println!("  3. {} бод", AVAILABLE_BAUD_RATES.4);
     println!("  4. {} бод", AVAILABLE_BAUD_RATES.3);
-    println!("  5. {} бод", AVAILABLE_BAUD_RATES.4);
-    println!("  6. {} бод", AVAILABLE_BAUD_RATES.5);
-    println!("  7. {} бод", AVAILABLE_BAUD_RATES.6);
+    println!("  5. {} бод", AVAILABLE_BAUD_RATES.2);
+    println!("  6. {} бод", AVAILABLE_BAUD_RATES.1);
+    println!("  7. {} бод", AVAILABLE_BAUD_RATES.0);
     
     loop {
         print!("\nВведите номер скорости (1-7): ");
@@ -195,13 +195,13 @@ fn select_baud_rate() -> io::Result<u32> {
         match input.trim().parse::<u8>() {
             Ok(choice) if choice >= 1 && choice <= 7 => {
                 let selected_baud = match choice {
-                    1 => AVAILABLE_BAUD_RATES.0,
-                    2 => AVAILABLE_BAUD_RATES.1,
-                    3 => AVAILABLE_BAUD_RATES.2,
+                    1 => AVAILABLE_BAUD_RATES.6,
+                    2 => AVAILABLE_BAUD_RATES.5,
+                    3 => AVAILABLE_BAUD_RATES.4,
                     4 => AVAILABLE_BAUD_RATES.3,
-                    5 => AVAILABLE_BAUD_RATES.4,
-                    6 => AVAILABLE_BAUD_RATES.5,
-                    7 => AVAILABLE_BAUD_RATES.6,
+                    5 => AVAILABLE_BAUD_RATES.2,
+                    6 => AVAILABLE_BAUD_RATES.1,
+                    7 => AVAILABLE_BAUD_RATES.0,
                     _ => unreachable!(), // Этого никогда не произойдет из-за проверки выше
                 };
                 println!("{}", format!("Выбрана скорость: {} бод", selected_baud).green());
