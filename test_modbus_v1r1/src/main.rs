@@ -582,14 +582,11 @@ async fn start_polling() -> io::Result<()> {
     println!();
     
     let timeout_duration = Duration::from_millis(1000);
-    let mut poll_count = 0;
     
     loop {
-        poll_count += 1;
-        
-        // Показываем время и номер опроса
+        // Показываем только время
         let timestamp = chrono::Local::now().format("%H:%M:%S");
-        print!("{} [{}] ", timestamp.to_string().bright_black(), poll_count.to_string().cyan());
+        print!("{} ", timestamp.to_string().bright_black());
         
         // Чтение входных регистров (функция 04) с таймаутом 1000 мс
         match tokio::time::timeout(timeout_duration, ctx.read_input_registers(register_addr, quantity)).await {
