@@ -329,6 +329,26 @@ fn load_settings() -> io::Result<Config> {
     Ok(config)
 }
 
+/// Функция сохранения настроек в JSON файл
+fn save_settings(connection: ConnectionSettings) -> io::Result<()> {
+    let metadata = Metadata {
+        last_updated: chrono::Utc::now().to_rfc3339(),
+        version: "1.0".to_string(),
+        description: "Настройки подключения для Modbus RTU через RS-485".to_string(),
+    };
+    
+    let config = Config {
+        connection,
+        metadata,
+    };
+    
+    let json_content = serde_json::to_string_pretty(&config)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    
+    fs::write("src/connect_settings.json", json_content)?;
+    Ok(())
+}
+
 /// Функция отображения настроек связи
 fn show_connection_settings() -> io::Result<()> {
     clear_screen();
@@ -374,6 +394,76 @@ fn wait_for_continue() -> io::Result<()> {
     println!("\n{}", "Нажмите Enter для продолжения...".bright_black());
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
+    Ok(())
+}
+
+/// Функция изменения настроек связи
+fn change_connection_settings() -> io::Result<()> {
+    clear_screen();
+    println!("{}", "=== Изменение настроек связи ===".cyan().bold());
+    println!();
+    
+    // Сканирование доступных портов
+    let mut available_ports: [u8; 10] = [0; 10];
+    let ports_count = scan_available_ports(&mut available_ports);
+    
+    // Выбор COM-порта
+    let port = loop {
+        match select_com_port(&available_ports, ports_count)? {
+            Some(port) => break port,
+            None => {
+                if !handle_no_ports()? {
+                    return Ok(()); // Пользователь выбрал выход
+                }
+                println!(); // Пустая строка для разделения
+                let ports_count = scan_available_ports(&mut available_ports);
+                if ports_count == 0 {
+                    continue;
+                }
+            }
+        }
+    };
+    
+    // Выбор адреса устройства
+    let device_address = select_device_address()?;
+    
+    // Выбор скорости передачи данных
+    let baud_rate = select_baud_rate()?;
+    
+    // Выбор четности
+    let parity_enum = select_parity()?;
+    let parity = match parity_enum {
+        tokio_serial::Parity::None => "None".to_string(),
+        tokio_serial::Parity::Even => "Even".to_string(),
+        tokio_serial::Parity::Odd => "Odd".to_string(),
+    };
+    
+    // Выбор количества стоп-битов
+    let stop_bits_enum = select_stop_bits()?;
+    let stop_bits = match stop_bits_enum {
+        tokio_serial::StopBits::One => 1,
+        tokio_serial::StopBits::Two => 2,
+    };
+    
+    // Создание структуры настроек
+    let connection_settings = ConnectionSettings {
+        port,
+        device_address,
+        baud_rate,
+        parity,
+        stop_bits,
+    };
+    
+    // Сохранение настроек в файл
+    match save_settings(connection_settings) {
+        Ok(()) => {
+            println!("\n{}", "Настройки успешно сохранены!".green().bold());
+        }
+        Err(e) => {
+            eprintln!("{}", format!("Ошибка сохранения настроек: {}", e).red());
+        }
+    }
+    
     Ok(())
 }
 
@@ -428,9 +518,10 @@ async fn main() -> io::Result<()> {
                 continue; // Возвращаемся к главному меню
             }
             2 => {
-                println!("{}", "Пункт 2: Изменить настройки связи (пока не реализован)".cyan());
-                // TODO: Реализация изменения настроек
-                break; // Пока что выходим из цикла
+                // Изменить настройки связи
+                change_connection_settings()?;
+                wait_for_continue()?;
+                continue; // Возвращаемся к главному меню
             }
             3 => {
                 println!("{}", "Пункт 3: Начать опрос".cyan());
