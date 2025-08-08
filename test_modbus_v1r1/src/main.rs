@@ -582,6 +582,7 @@ async fn start_polling() -> io::Result<()> {
     println!();
     
     let timeout_duration = Duration::from_millis(1000);
+    let mut error_count = 0;
     
     loop {
         // Показываем только время
@@ -591,13 +592,25 @@ async fn start_polling() -> io::Result<()> {
         // Чтение входных регистров (функция 04) с таймаутом 1000 мс
         match tokio::time::timeout(timeout_duration, ctx.read_input_registers(register_addr, quantity)).await {
             Ok(Ok(data)) => {
+                // Успешный ответ - сбрасываем счётчик ошибок
+                error_count = 0;
                 println!("{}", format!("Регистр {}: {}", register_addr, data[0]).green());
             }
             Ok(Err(e)) => {
-                println!("{}", format!("Ошибка: {:?}", e).red());
+                // Ошибка Modbus - увеличиваем счётчик
+                error_count += 1;
+                println!("{} {}", 
+                    format!("Ошибка: {:?}", e).red(),
+                    format!("(неудач: {})", error_count).yellow()
+                );
             }
             Err(_) => {
-                println!("{}", "Таймаут!".red());
+                // Таймаут - увеличиваем счётчик
+                error_count += 1;
+                println!("{} {}", 
+                    "Таймаут!".red(),
+                    format!("(неудач: {})", error_count).yellow()
+                );
             }
         }
         
