@@ -7,7 +7,7 @@
     "stop_bits": 1
   },
   "metadata": {
-    "last_updated": "2024-01-01T00:00:00Z",
+    "last_updated": "2025-08-08T03:05:59.755242200+00:00",
     "version": "1.0",
     "description": "Настройки подключения для Modbus RTU через RS-485"
   }
