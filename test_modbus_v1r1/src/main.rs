@@ -385,15 +385,16 @@ fn show_main_menu() -> io::Result<u8> {
     println!("  {} - Показать настройки связи", "1".green());
     println!("  {} - Изменить настройки связи", "2".blue());
     println!("  {} - Начать опрос", "3".magenta());
+    println!("  {} - Выйти", "9".red());
     
-    print!("\nВаш выбор (1-3): ");
+    print!("\nВаш выбор (1-3, 9): ");
     io::stdout().flush()?;
     
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
     
     match input.trim().parse::<u8>() {
-        Ok(choice) if choice >= 1 && choice <= 3 => Ok(choice),
+        Ok(1) | Ok(2) | Ok(3) | Ok(9) => Ok(input.trim().parse().unwrap()),
         _ => {
             println!("{}", "Неверный выбор! Используется пункт 3 по умолчанию.".yellow());
             Ok(3)
@@ -426,6 +427,10 @@ async fn main() -> io::Result<()> {
             3 => {
                 println!("{}", "Пункт 3: Начать опрос".cyan());
                 break; // Выходим из цикла и продолжаем выполнение
+            }
+            9 => {
+                println!("{}", "Завершение программы...".yellow());
+                return Ok(()); // Завершаем программу
             }
             _ => unreachable!(), // Этого не произойдет из-за проверки в show_main_menu
         }
