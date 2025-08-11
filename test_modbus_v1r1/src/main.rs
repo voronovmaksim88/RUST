@@ -1,25 +1,24 @@
-use tokio_modbus::prelude::*;
-use tokio_serial::{SerialStream};
+use colored::*;
+use serde::{Deserialize, Serialize};
+use serialport;
+use std::fs;
 use std::io::{self, Write};
 use std::time::Duration;
-use std::fs;
-use colored::*;
-use serialport;
-use serde::{Deserialize, Serialize};
+use tokio_modbus::prelude::*;
+use tokio_serial::SerialStream;
 
 #[cfg(windows)]
 use winapi::um::consoleapi::{GetConsoleMode, SetConsoleMode};
 #[cfg(windows)]
 use winapi::um::processenv::GetStdHandle;
 #[cfg(windows)]
-use winapi::um::winbase::{STD_OUTPUT_HANDLE, STD_ERROR_HANDLE};
+use winapi::um::winbase::{STD_ERROR_HANDLE, STD_OUTPUT_HANDLE};
 #[cfg(windows)]
 const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x0004;
 
 /// Доступные скорости передачи данных для RS-485 (в бодах)
-const AVAILABLE_BAUD_RATES: (u32, u32, u32, u32, u32, u32, u32) = (
-    2400, 4800, 9600, 19200, 38400, 57600, 115200
-);
+const AVAILABLE_BAUD_RATES: (u32, u32, u32, u32, u32, u32, u32) =
+    (2400, 4800, 9600, 19200, 38400, 57600, 115200);
 
 /// Доступные варианты четности для RS-485
 const PARITY_OPTIONS: (&str, &str, &str) = ("None", "Even", "Odd");
@@ -45,6 +44,25 @@ struct Metadata {
     description: String,
 }
 
+/// Структура для описания регистра
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct RegisterConfig {
+    name: String,
+    description: String,
+    address: u16,
+    quantity: u16,
+    var_type: String,
+    modbus_type: String,
+    enabled: bool,
+}
+
+/// Структура для хранения всех регистров
+#[derive(Serialize, Deserialize, Debug)]
+struct RegistersConfig {
+    registers: Vec<RegisterConfig>,
+    metadata: Metadata,
+}
+
 /// Основная структура конфигурации
 #[derive(Serialize, Deserialize, Debug)]
 struct Config {
@@ -58,12 +76,12 @@ fn enable_ansi_support() {
     unsafe {
         let stdout = GetStdHandle(STD_OUTPUT_HANDLE);
         let stderr = GetStdHandle(STD_ERROR_HANDLE);
-        
+
         let mut mode: u32 = 0;
         if GetConsoleMode(stdout, &mut mode) != 0 {
             SetConsoleMode(stdout, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
         }
-        
+
         let mut mode: u32 = 0;
         if GetConsoleMode(stderr, &mut mode) != 0 {
             SetConsoleMode(stderr, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
@@ -80,9 +98,9 @@ fn enable_ansi_support() {
 /// Функция сканирования доступных COM-портов
 fn scan_available_ports(available_ports: &mut [u8; 10]) -> usize {
     let mut count = 0;
-    
+
     println!("Сканирование доступных COM-портов...");
-    
+
     match serialport::available_ports() {
         Ok(ports) => {
             for port in ports {
@@ -96,7 +114,7 @@ fn scan_available_ports(available_ports: &mut [u8; 10]) -> usize {
                     }
                 }
             }
-            
+
             if count == 0 {
                 println!("{}", "  COM-порты не найдены".yellow());
             } else {
@@ -107,7 +125,7 @@ fn scan_available_ports(available_ports: &mut [u8; 10]) -> usize {
             eprintln!("{}", format!("Ошибка сканирования портов: {:?}", e).red());
         }
     }
-    
+
     count
 }
 
@@ -117,14 +135,14 @@ fn handle_no_ports() -> io::Result<bool> {
     println!("\n{}", "Выберите действие:".yellow());
     println!("  {} - выйти", "0".red());
     println!("  {} - повторить поиск", "1".green());
-    
+
     loop {
         print!("\nВаш выбор (0-1): ");
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
-        
+
         match input.trim().parse::<u8>() {
             Ok(0) => {
                 println!("{}", "Выход из программы...".yellow());
@@ -135,7 +153,10 @@ fn handle_no_ports() -> io::Result<bool> {
                 return Ok(true); // true = повторить поиск
             }
             _ => {
-                println!("{}", "Неверный выбор! Введите 0 для выхода или 1 для повторного поиска.".red());
+                println!(
+                    "{}",
+                    "Неверный выбор! Введите 0 для выхода или 1 для повторного поиска.".red()
+                );
             }
         }
     }
@@ -146,21 +167,21 @@ fn select_com_port(available_ports: &[u8; 10], ports_count: usize) -> io::Result
     if ports_count == 0 {
         return Ok(None);
     }
-    
+
     println!("\n{}", "Выберите COM-порт для подключения:".cyan());
-    
+
     // Показываем список доступных портов
     for i in 0..ports_count {
         println!("  {}. COM{}", i + 1, available_ports[i]);
     }
-    
+
     loop {
         print!("\nВведите номер порта (1-{}): ", ports_count);
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
-        
+
         match input.trim().parse::<usize>() {
             Ok(choice) if choice >= 1 && choice <= ports_count => {
                 let selected_port = format!("COM{}", available_ports[choice - 1]);
@@ -168,7 +189,10 @@ fn select_com_port(available_ports: &[u8; 10], ports_count: usize) -> io::Result
                 return Ok(Some(selected_port));
             }
             _ => {
-                println!("{}", format!("Неверный выбор! Введите число от 1 до {}", ports_count).red());
+                println!(
+                    "{}",
+                    format!("Неверный выбор! Введите число от 1 до {}", ports_count).red()
+                );
             }
         }
     }
@@ -178,21 +202,31 @@ fn select_com_port(available_ports: &[u8; 10], ports_count: usize) -> io::Result
 fn select_device_address() -> io::Result<u8> {
     println!("\n{}", "Выбор адреса устройства Modbus".cyan());
     println!("Допустимый диапазон: 1-240");
-    
+
     loop {
         print!("\nВведите адрес устройства (1-240): ");
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
-        
+
         match input.trim().parse::<u8>() {
             Ok(address) if address >= 1 && address <= 240 => {
-                println!("{}", format!("Выбран адрес устройства: {}", address).green());
+                println!(
+                    "{}",
+                    format!("Выбран адрес устройства: {}", address).green()
+                );
                 return Ok(address);
             }
             Ok(address) => {
-                println!("{}", format!("Недопустимый адрес: {}! Введите значение от 1 до 240.", address).red());
+                println!(
+                    "{}",
+                    format!(
+                        "Недопустимый адрес: {}! Введите значение от 1 до 240.",
+                        address
+                    )
+                    .red()
+                );
             }
             Err(_) => {
                 println!("{}", "Неверный формат! Введите число от 1 до 240.".red());
@@ -205,7 +239,7 @@ fn select_device_address() -> io::Result<u8> {
 fn select_baud_rate() -> io::Result<u32> {
     println!("\n{}", "Выбор скорости передачи данных RS-485".cyan());
     println!("Доступные скорости:");
-    
+
     // Показываем список доступных скоростей в обратном порядке (от большей к меньшей)
     println!("  1. {} бод", AVAILABLE_BAUD_RATES.6);
     println!("  2. {} бод", AVAILABLE_BAUD_RATES.5);
@@ -214,14 +248,14 @@ fn select_baud_rate() -> io::Result<u32> {
     println!("  5. {} бод", AVAILABLE_BAUD_RATES.2);
     println!("  6. {} бод", AVAILABLE_BAUD_RATES.1);
     println!("  7. {} бод", AVAILABLE_BAUD_RATES.0);
-    
+
     loop {
         print!("\nВведите номер скорости (1-7): ");
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
-        
+
         match input.trim().parse::<u8>() {
             Ok(choice) if choice >= 1 && choice <= 7 => {
                 let selected_baud = match choice {
@@ -234,11 +268,17 @@ fn select_baud_rate() -> io::Result<u32> {
                     7 => AVAILABLE_BAUD_RATES.0,
                     _ => unreachable!(), // Этого никогда не произойдет из-за проверки выше
                 };
-                println!("{}", format!("Выбрана скорость: {} бод", selected_baud).green());
+                println!(
+                    "{}",
+                    format!("Выбрана скорость: {} бод", selected_baud).green()
+                );
                 return Ok(selected_baud);
             }
             Ok(choice) => {
-                println!("{}", format!("Недопустимый выбор: {}! Введите число от 1 до 7.", choice).red());
+                println!(
+                    "{}",
+                    format!("Недопустимый выбор: {}! Введите число от 1 до 7.", choice).red()
+                );
             }
             Err(_) => {
                 println!("{}", "Неверный формат! Введите число от 1 до 7.".red());
@@ -251,19 +291,19 @@ fn select_baud_rate() -> io::Result<u32> {
 fn select_parity() -> io::Result<tokio_serial::Parity> {
     println!("\n{}", "Выбор четности для RS-485".cyan());
     println!("Доступные варианты четности:");
-    
+
     // Показываем список доступных вариантов четности
     println!("  1. {} - без контроля четности", PARITY_OPTIONS.0);
     println!("  2. {} - четная четность", PARITY_OPTIONS.1);
     println!("  3. {} - нечетная четность", PARITY_OPTIONS.2);
-    
+
     loop {
         print!("\nВведите номер четности (1-3): ");
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
-        
+
         match input.trim().parse::<u8>() {
             Ok(choice) if choice >= 1 && choice <= 3 => {
                 let (selected_parity, parity_name) = match choice {
@@ -276,7 +316,10 @@ fn select_parity() -> io::Result<tokio_serial::Parity> {
                 return Ok(selected_parity);
             }
             Ok(choice) => {
-                println!("{}", format!("Недопустимый выбор: {}! Введите число от 1 до 3.", choice).red());
+                println!(
+                    "{}",
+                    format!("Недопустимый выбор: {}! Введите число от 1 до 3.", choice).red()
+                );
             }
             Err(_) => {
                 println!("{}", "Неверный формат! Введите число от 1 до 3.".red());
@@ -289,18 +332,18 @@ fn select_parity() -> io::Result<tokio_serial::Parity> {
 fn select_stop_bits() -> io::Result<tokio_serial::StopBits> {
     println!("\n{}", "Выбор количества стоп-битов для RS-485".cyan());
     println!("Доступные варианты:");
-    
+
     // Показываем список доступных вариантов стоп-битов
     println!("  1. {} (стандартная настройка)", STOP_BITS_OPTIONS.0);
     println!("  2. {} (повышенная надежность)", STOP_BITS_OPTIONS.1);
-    
+
     loop {
         print!("\nВведите номер стоп-битов (1-2): ");
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
-        
+
         match input.trim().parse::<u8>() {
             Ok(choice) if choice >= 1 && choice <= 2 => {
                 let (selected_stop_bits, stop_bits_name) = match choice {
@@ -312,7 +355,10 @@ fn select_stop_bits() -> io::Result<tokio_serial::StopBits> {
                 return Ok(selected_stop_bits);
             }
             Ok(choice) => {
-                println!("{}", format!("Недопустимый выбор: {}! Введите число от 1 до 2.", choice).red());
+                println!(
+                    "{}",
+                    format!("Недопустимый выбор: {}! Введите число от 1 до 2.", choice).red()
+                );
             }
             Err(_) => {
                 println!("{}", "Неверный формат! Введите число от 1 до 2.".red());
@@ -333,12 +379,36 @@ fn get_settings_path() -> String {
         match std::env::current_exe() {
             Ok(exe_path) => {
                 if let Some(exe_dir) = exe_path.parent() {
-                    exe_dir.join("connect_settings.json").to_string_lossy().to_string()
+                    exe_dir
+                        .join("connect_settings.json")
+                        .to_string_lossy()
+                        .to_string()
                 } else {
                     "connect_settings.json".to_string()
                 }
             }
-            Err(_) => "connect_settings.json".to_string()
+            Err(_) => "connect_settings.json".to_string(),
+        }
+    }
+}
+
+/// Функция получения пути к файлу регистров
+fn get_registers_path() -> String {
+    if cfg!(debug_assertions) {
+        "registers.json".to_string()
+    } else {
+        match std::env::current_exe() {
+            Ok(exe_path) => {
+                if let Some(exe_dir) = exe_path.parent() {
+                    exe_dir
+                        .join("registers.json")
+                        .to_string_lossy()
+                        .to_string()
+                } else {
+                    "registers.json".to_string()
+                }
+            }
+            Err(_) => "registers.json".to_string(),
         }
     }
 }
@@ -352,6 +422,15 @@ fn load_settings() -> io::Result<Config> {
     Ok(config)
 }
 
+/// Функция загрузки конфигурации регистров из JSON файла
+fn load_registers() -> io::Result<RegistersConfig> {
+    let registers_path = get_registers_path();
+    let file_content = fs::read_to_string(&registers_path)?;
+    let registers_config: RegistersConfig = serde_json::from_str(&file_content)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    Ok(registers_config)
+}
+
 /// Функция сохранения настроек в JSON файл
 fn save_settings(connection: ConnectionSettings) -> io::Result<()> {
     let metadata = Metadata {
@@ -359,15 +438,15 @@ fn save_settings(connection: ConnectionSettings) -> io::Result<()> {
         version: "1.0".to_string(),
         description: "Настройки подключения для Modbus RTU через RS-485".to_string(),
     };
-    
+
     let config = Config {
         connection,
         metadata,
     };
-    
+
     let json_content = serde_json::to_string_pretty(&config)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    
+
     let settings_path = get_settings_path();
     fs::write(&settings_path, json_content)?;
     Ok(())
@@ -377,33 +456,53 @@ fn save_settings(connection: ConnectionSettings) -> io::Result<()> {
 fn show_connection_settings() -> io::Result<()> {
     clear_screen();
     println!("{}", "=== Текущие настройки связи ===".cyan().bold());
-    
+
     match load_settings() {
         Ok(config) => {
             let conn = &config.connection;
             println!("\n{}", "Параметры подключения:".yellow());
             println!("  {} {}", "COM-порт:".green(), conn.port.bright_white());
-            println!("  {} {}", "Адрес устройства:".green(), conn.device_address.to_string().bright_white());
-            println!("  {} {} бод", "Скорость:".green(), conn.baud_rate.to_string().bright_white());
+            println!(
+                "  {} {}",
+                "Адрес устройства:".green(),
+                conn.device_address.to_string().bright_white()
+            );
+            println!(
+                "  {} {} бод",
+                "Скорость:".green(),
+                conn.baud_rate.to_string().bright_white()
+            );
             println!("  {} {}", "Четность:".green(), conn.parity.bright_white());
-            
+
             let stop_bits_text = match conn.stop_bits {
                 1 => "1 стоп-бит",
                 2 => "2 стоп-бита",
                 _ => "неизвестно",
             };
-            println!("  {} {}", "Стоп-биты:".green(), stop_bits_text.bright_white());
-            
+            println!(
+                "  {} {}",
+                "Стоп-биты:".green(),
+                stop_bits_text.bright_white()
+            );
+
             println!("\n{}", "Информация о файле:".yellow());
-            println!("  {} {}", "Версия:".blue(), config.metadata.version.bright_white());
-            println!("  {} {}", "Обновлен:".blue(), config.metadata.last_updated.bright_white());
+            println!(
+                "  {} {}",
+                "Версия:".blue(),
+                config.metadata.version.bright_white()
+            );
+            println!(
+                "  {} {}",
+                "Обновлен:".blue(),
+                config.metadata.last_updated.bright_white()
+            );
         }
         Err(e) => {
             eprintln!("{}", format!("Ошибка загрузки настроек: {}", e).red());
             println!("{}", "Будут использованы настройки по умолчанию.".yellow());
         }
     }
-    
+
     Ok(())
 }
 
@@ -421,16 +520,71 @@ fn wait_for_continue() -> io::Result<()> {
     Ok(())
 }
 
+/// Функция для обработки данных регистра в зависимости от типа
+fn process_register_data(data: &[u16], register: &RegisterConfig) -> String {
+    match register.var_type.as_str() {
+        "u16" => {
+            if data.len() >= 1 {
+                format!("{} (0x{:04X})", data[0], data[0])
+            } else {
+                "Недостаточно данных".to_string()
+            }
+        }
+        "i16" => {
+            if data.len() >= 1 {
+                let value = data[0] as i16;
+                format!("{} (0x{:04X})", value, data[0])
+            } else {
+                "Недостаточно данных".to_string()
+            }
+        }
+        "u32" | "i32" => {
+            if data.len() >= 2 {
+                // Объединяем два 16-битных регистра в одно 32-битное значение
+                let high_word = data[1] as u32;
+                let low_word = data[0] as u32;
+                let combined = (high_word << 16) | low_word;
+                
+                if register.var_type == "i32" {
+                    let value = combined as i32;
+                    format!("{} (0x{:08X})", value, combined)
+                } else {
+                    format!("{} (0x{:08X})", combined, combined)
+                }
+            } else {
+                "Недостаточно данных".to_string()
+            }
+        }
+        "float" => {
+            if data.len() >= 2 {
+                // Объединяем два 16-битных регистра в float (IEEE 754)
+                let high_word = data[1] as u32;
+                let low_word = data[0] as u32;
+                let combined = (high_word << 16) | low_word;
+                let value = f32::from_bits(combined);
+                format!("{:.3} (0x{:08X})", value, combined)
+            } else {
+                "Недостаточно данных".to_string()
+            }
+        }
+        _ => {
+            // Неизвестный тип - показываем как массив u16
+            let hex_values: Vec<String> = data.iter().map(|&x| format!("0x{:04X}", x)).collect();
+            format!("[{}]", hex_values.join(", "))
+        }
+    }
+}
+
 /// Функция изменения настроек связи
 fn change_connection_settings() -> io::Result<()> {
     clear_screen();
     println!("{}", "=== Изменение настроек связи ===".cyan().bold());
     println!();
-    
+
     // Сканирование доступных портов
     let mut available_ports: [u8; 10] = [0; 10];
     let ports_count = scan_available_ports(&mut available_ports);
-    
+
     // Выбор COM-порта
     let port = loop {
         match select_com_port(&available_ports, ports_count)? {
@@ -447,13 +601,13 @@ fn change_connection_settings() -> io::Result<()> {
             }
         }
     };
-    
+
     // Выбор адреса устройства
     let device_address = select_device_address()?;
-    
+
     // Выбор скорости передачи данных
     let baud_rate = select_baud_rate()?;
-    
+
     // Выбор четности
     let parity_enum = select_parity()?;
     let parity = match parity_enum {
@@ -461,14 +615,14 @@ fn change_connection_settings() -> io::Result<()> {
         tokio_serial::Parity::Even => "Even".to_string(),
         tokio_serial::Parity::Odd => "Odd".to_string(),
     };
-    
+
     // Выбор количества стоп-битов
     let stop_bits_enum = select_stop_bits()?;
     let stop_bits = match stop_bits_enum {
         tokio_serial::StopBits::One => 1,
         tokio_serial::StopBits::Two => 2,
     };
-    
+
     // Создание структуры настроек
     let connection_settings = ConnectionSettings {
         port,
@@ -477,7 +631,7 @@ fn change_connection_settings() -> io::Result<()> {
         parity,
         stop_bits,
     };
-    
+
     // Сохранение настроек в файл
     match save_settings(connection_settings) {
         Ok(()) => {
@@ -487,7 +641,7 @@ fn change_connection_settings() -> io::Result<()> {
             eprintln!("{}", format!("Ошибка сохранения настроек: {}", e).red());
         }
     }
-    
+
     Ok(())
 }
 
@@ -495,35 +649,77 @@ fn change_connection_settings() -> io::Result<()> {
 async fn start_polling() -> io::Result<()> {
     clear_screen();
     println!("{}", "=== Запуск опроса устройства ===".cyan().bold());
-    
-    // Загрузка настроек из файла
+
+    // Загрузка настроек подключения
     let config = match load_settings() {
         Ok(config) => {
-            println!("{}", "Настройки успешно загружены из файла".green());
+            println!("{}", "Настройки подключения успешно загружены".green());
             config
         }
         Err(e) => {
-            eprintln!("{}", format!("Ошибка загрузки настроек: {}", e).red());
-            println!("{}", "Убедитесь, что настройки сохранены (пункт 2 в главном меню)".yellow());
+            eprintln!("{}", format!("Ошибка загрузки настроек подключения: {}", e).red());
+            println!(
+                "{}",
+                "Убедитесь, что настройки сохранены (пункт 2 в главном меню)".yellow()
+            );
             return Err(e);
         }
     };
-    
+
+    // Загрузка конфигурации регистров
+    let registers_config = match load_registers() {
+        Ok(registers_config) => {
+            println!("{}", "Конфигурация регистров успешно загружена".green());
+            registers_config
+        }
+        Err(e) => {
+            eprintln!("{}", format!("Ошибка загрузки конфигурации регистров: {}", e).red());
+            println!("{}", "Убедитесь, что файл registers.json существует и корректен".yellow());
+            return Err(e);
+        }
+    };
+
     let conn = &config.connection;
-    println!("Используемые настройки:");
+    let enabled_registers: Vec<&RegisterConfig> = registers_config.registers
+        .iter()
+        .filter(|reg| reg.enabled)
+        .collect();
+
+    if enabled_registers.is_empty() {
+        println!("{}", "Нет активных регистров для опроса!".red());
+        println!("{}", "Проверьте файл registers.json и убедитесь, что есть регистры с enabled: true".yellow());
+        return Ok(());
+    }
+
+    println!("Используемые настройки подключения:");
     println!("  COM-порт: {}", conn.port.bright_white());
-    println!("  Адрес устройства: {}", conn.device_address.to_string().bright_white());
-    println!("  Скорость: {} бод", conn.baud_rate.to_string().bright_white());
+    println!(
+        "  Адрес устройства: {}",
+        conn.device_address.to_string().bright_white()
+    );
+    println!(
+        "  Скорость: {} бод",
+        conn.baud_rate.to_string().bright_white()
+    );
     println!("  Четность: {}", conn.parity.bright_white());
-    
+
     let stop_bits_text = match conn.stop_bits {
         1 => "1 стоп-бит",
         2 => "2 стоп-бита",
         _ => "неизвестно",
     };
     println!("  Стоп-биты: {}", stop_bits_text.bright_white());
-    println!();
     
+    println!("\nАктивные регистры для опроса:");
+    for register in &enabled_registers {
+        println!("  {} (адрес: {}, тип: {}, количество: {})", 
+                 register.name.cyan(), 
+                 register.address, 
+                 register.var_type.yellow(), 
+                 register.quantity);
+    }
+    println!();
+
     // Преобразование настроек для tokio_serial
     let parity = match conn.parity.as_str() {
         "None" => tokio_serial::Parity::None,
@@ -531,31 +727,41 @@ async fn start_polling() -> io::Result<()> {
         "Odd" => tokio_serial::Parity::Odd,
         _ => tokio_serial::Parity::None,
     };
-    
+
     let stop_bits = match conn.stop_bits {
         1 => tokio_serial::StopBits::One,
         2 => tokio_serial::StopBits::Two,
         _ => tokio_serial::StopBits::One,
     };
-    
+
     // Настройка параметров последовательного порта
     let builder = tokio_serial::new(&conn.port, conn.baud_rate)
         .data_bits(tokio_serial::DataBits::Eight)
         .parity(parity)
         .stop_bits(stop_bits);
-    
+
     // Открытие последовательного порта
     let port = match SerialStream::open(&builder) {
         Ok(port) => {
-            println!("{}", format!("Последовательный порт {} успешно открыт", conn.port).green());
+            println!(
+                "{}",
+                format!("Последовательный порт {} успешно открыт", conn.port).green()
+            );
             port
         }
         Err(e) => {
-            eprintln!("{}", format!("Ошибка открытия последовательного порта {}: {:?}", conn.port, e).red());
+            eprintln!(
+                "{}",
+                format!(
+                    "Ошибка открытия последовательного порта {}: {:?}",
+                    conn.port, e
+                )
+                .red()
+            );
             return Err(e.into());
         }
     };
-    
+
     // Создание контекста Modbus RTU
     let mut ctx = match rtu::connect(port).await {
         Ok(ctx) => {
@@ -563,57 +769,88 @@ async fn start_polling() -> io::Result<()> {
             ctx
         }
         Err(e) => {
-            eprintln!("{}", format!("Ошибка создания Modbus RTU контекста: {:?}", e).red());
+            eprintln!(
+                "{}",
+                format!("Ошибка создания Modbus RTU контекста: {:?}", e).red()
+            );
             return Err(e.into());
         }
     };
-    
-    // Параметры запроса
-    let slave_addr = Slave(conn.device_address);
-    let register_addr = 21; // Номер регистра
-    let quantity = 1; // Количество регистров для чтения
-    
+
     // Установка адреса устройства
+    let slave_addr = Slave(conn.device_address);
     ctx.set_slave(slave_addr);
-    
+
     // Циклический опрос устройства каждую секунду
-    println!("{}", "Начинается циклический опрос устройства (каждую секунду)...".cyan());
+    println!(
+        "{}",
+        "Начинается циклический опрос устройства (каждую секунду)...".cyan()
+    );
     println!("{}", "Нажмите Ctrl+C для остановки опроса".yellow());
     println!();
-    
+
     let timeout_duration = Duration::from_millis(1000);
     let mut error_count = 0;
-    
+
     loop {
         // Показываем только время
         let timestamp = chrono::Local::now().format("%H:%M:%S");
         print!("{} ", timestamp.to_string().bright_black());
-        
-        // Чтение входных регистров (функция 04) с таймаутом 1000 мс
-        match tokio::time::timeout(timeout_duration, ctx.read_input_registers(register_addr, quantity)).await {
-            Ok(Ok(data)) => {
-                // Успешный ответ - сбрасываем счётчик ошибок
-                error_count = 0;
-                println!("{}", format!("Регистр {}: {}", register_addr, data[0]).green());
-            }
-            Ok(Err(e)) => {
-                // Ошибка Modbus - увеличиваем счётчик
-                error_count += 1;
-                println!("{} {}", 
-                    format!("Ошибка: {:?}", e).red(),
-                    format!("(error_count: {})", error_count).yellow()
-                );
-            }
-            Err(_) => {
-                // Таймаут - увеличиваем счётчик
-                error_count += 1;
-                println!("{} {}", 
-                    "Таймаут!".red(),
-                    format!("(error_count: {})", error_count).yellow()
-                );
+
+        let mut all_success = true;
+
+        // Опрашиваем каждый активный регистр
+        for register in &enabled_registers {
+            let result = match register.modbus_type.as_str() {
+                "input_register" => {
+                    tokio::time::timeout(
+                        timeout_duration,
+                        ctx.read_input_registers(register.address, register.quantity),
+                    )
+                    .await
+                }
+                "holding_register" => {
+                    tokio::time::timeout(
+                        timeout_duration,
+                        ctx.read_holding_registers(register.address, register.quantity),
+                    )
+                    .await
+                }
+                _ => {
+                    println!("Неизвестный тип регистра: {}", register.modbus_type.red());
+                    continue;
+                }
+            };
+
+            match result {
+                Ok(Ok(data)) => {
+                    let processed_value = process_register_data(&data, register);
+                    print!("{}: {} | ", register.name.cyan(), processed_value.green());
+                }
+                Ok(Err(e)) => {
+                    print!("{}: {} | ", register.name.cyan(), format!("Ошибка: {:?}", e).red());
+                    all_success = false;
+                }
+                Err(_) => {
+                    print!("{}: {} | ", register.name.cyan(), "Таймаут".red());
+                    all_success = false;
+                }
             }
         }
-        
+
+        // Обновляем счетчик ошибок
+        if all_success {
+            error_count = 0;
+        } else {
+            error_count += 1;
+        }
+
+        if !all_success {
+            print!("{}", format!("(errors: {})", error_count).yellow());
+        }
+
+        println!(); // Переход на новую строку
+
         // Ожидание 1 секунды перед следующим опросом
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
@@ -628,17 +865,20 @@ fn show_main_menu() -> io::Result<u8> {
     println!("  {} - Изменить настройки связи", "2".blue());
     println!("  {} - Начать опрос", "3".magenta());
     println!("  {} - Выйти", "9".red());
-    
+
     print!("\nВаш выбор (1-3, 9): ");
     io::stdout().flush()?;
-    
+
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
-    
+
     match input.trim().parse::<u8>() {
         Ok(1) | Ok(2) | Ok(3) | Ok(9) => Ok(input.trim().parse().unwrap()),
         _ => {
-            println!("{}", "Неверный выбор! Используется пункт 3 по умолчанию.".yellow());
+            println!(
+                "{}",
+                "Неверный выбор! Используется пункт 3 по умолчанию.".yellow()
+            );
             Ok(3)
         }
     }
@@ -652,7 +892,7 @@ async fn main() -> io::Result<()> {
     // Главный цикл программы
     loop {
         let choice = show_main_menu()?;
-        
+
         match choice {
             1 => {
                 // Показать настройки связи
