@@ -856,6 +856,112 @@ async fn start_polling() -> io::Result<()> {
     }
 }
 
+/// Функция отображения всех регистров и их настроек
+fn show_registers() -> io::Result<()> {
+    clear_screen();
+    println!("{}", "=== Конфигурация регистров ===".cyan().bold());
+
+    match load_registers() {
+        Ok(registers_config) => {
+            println!("{}", "Регистры успешно загружены из файла".green());
+            
+            // Показываем метаданные
+            println!("\n{}", "Информация о конфигурации:".yellow());
+            println!("  {} {}", "Версия:".blue(), registers_config.metadata.version.bright_white());
+            println!("  {} {}", "Описание:".blue(), registers_config.metadata.description.bright_white());
+            println!("  {} {}", "Обновлено:".blue(), registers_config.metadata.last_updated.bright_white());
+            
+            // Показываем статистику
+            let total_count = registers_config.registers.len();
+            let enabled_count = registers_config.registers.iter().filter(|reg| reg.enabled).count();
+            let disabled_count = total_count - enabled_count;
+            
+            println!("\n{}", "Статистика регистров:".yellow());
+            println!("  {} {}", "Всего регистров:".blue(), total_count.to_string().bright_white());
+            println!("  {} {}", "Активных:".green(), enabled_count.to_string().bright_white());
+            println!("  {} {}", "Отключенных:".red(), disabled_count.to_string().bright_white());
+            
+            if registers_config.registers.is_empty() {
+                println!("\n{}", "Регистры не найдены!".red());
+            } else {
+                println!("\n{}", "Список регистров:".yellow());
+                println!("{}", "─".repeat(120));
+                println!("{:<3} {:<20} {:<40} {:<8} {:<8} {:<10} {:<20} {:<10}",
+                         "#", "Имя", "Описание", "Адрес", "Кол-во", "Тип", "Modbus тип", "Статус");
+                println!("{}", "─".repeat(120));
+                
+                for (index, register) in registers_config.registers.iter().enumerate() {
+                    let status = if register.enabled { 
+                        "Активен".green() 
+                    } else { 
+                        "Отключен".red() 
+                    };
+                    
+                    let name = if register.name.chars().count() > 19 {
+                        let truncated: String = register.name.chars().take(16).collect();
+                        format!("{}...", truncated)
+                    } else {
+                        register.name.clone()
+                    };
+                    
+                    let description = if register.description.chars().count() > 39 {
+                        let truncated: String = register.description.chars().take(36).collect();
+                        format!("{}...", truncated)
+                    } else {
+                        register.description.clone()
+                    };
+                    
+                    println!("{:<3} {:<20} {:<40} {:<8} {:<8} {:<10} {:<20} {}", 
+                             (index + 1).to_string().bright_black(),
+                             name.cyan(),
+                             description,
+                             register.address.to_string().bright_white(),
+                             register.quantity.to_string().bright_white(),
+                             register.var_type.yellow(),
+                             register.modbus_type.blue(),
+                             status);
+                }
+                println!("{}", "─".repeat(120));
+            }
+        }
+        Err(e) => {
+            eprintln!("{}", format!("Ошибка загрузки регистров: {}", e).red());
+            println!("{}", "Убедитесь, что файл registers.json существует и корректен".yellow());
+        }
+    }
+
+    Ok(())
+}
+
+/// Функция отображения меню регистров
+fn show_registers_menu() -> io::Result<u8> {
+    clear_screen();
+    println!("{}", "=== Управление регистрами ===".cyan().bold());
+    println!("\n{}", "Выберите действие:".yellow());
+    println!("  {} - Показать регистры", "1".green());
+    println!("  {} - Удалить регистр", "2".red());
+    println!("  {} - Добавить регистр", "3".blue());
+    println!("  {} - Изменить регистр", "4".magenta());
+    println!("  {} - Назад в главное меню", "9".bright_black());
+
+    print!("\nВаш выбор (1-4, 9): ");
+    io::stdout().flush()?;
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+
+    match input.trim().parse::<u8>() {
+        Ok(1) | Ok(2) | Ok(3) | Ok(4) | Ok(9) => Ok(input.trim().parse().unwrap()),
+        _ => {
+            println!(
+                "{}",
+                "Неверный выбор! Возвращаемся в главное меню.".yellow()
+            );
+            Ok(9)
+        }
+    }
+}
+
 /// Функция отображения главного меню
 fn show_main_menu() -> io::Result<u8> {
     clear_screen();
@@ -864,16 +970,17 @@ fn show_main_menu() -> io::Result<u8> {
     println!("  {} - Показать настройки связи", "1".green());
     println!("  {} - Изменить настройки связи", "2".blue());
     println!("  {} - Начать опрос", "3".magenta());
+    println!("  {} - Регистры", "4".bright_blue());
     println!("  {} - Выйти", "9".red());
 
-    print!("\nВаш выбор (1-3, 9): ");
+    print!("\nВаш выбор (1-4, 9): ");
     io::stdout().flush()?;
 
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
 
     match input.trim().parse::<u8>() {
-        Ok(1) | Ok(2) | Ok(3) | Ok(9) => Ok(input.trim().parse().unwrap()),
+        Ok(1) | Ok(2) | Ok(3) | Ok(4) | Ok(9) => Ok(input.trim().parse().unwrap()),
         _ => {
             println!(
                 "{}",
@@ -917,6 +1024,40 @@ async fn main() -> io::Result<()> {
                         continue; // Возвращаемся к главному меню
                     }
                 }
+            }
+            4 => {
+                // Меню управления регистрами
+                loop {
+                    let registers_choice = show_registers_menu()?;
+                    match registers_choice {
+                        1 => {
+                            // Показать регистры
+                            show_registers()?;
+                            wait_for_continue()?;
+                        }
+                        2 => {
+                            // Удалить регистр (пока не реализовано)
+                            println!("{}", "Функция 'Удалить регистр' пока не реализована".yellow());
+                            wait_for_continue()?;
+                        }
+                        3 => {
+                            // Добавить регистр (пока не реализовано)
+                            println!("{}", "Функция 'Добавить регистр' пока не реализована".yellow());
+                            wait_for_continue()?;
+                        }
+                        4 => {
+                            // Изменить регистр (пока не реализовано)
+                            println!("{}", "Функция 'Изменить регистр' пока не реализована".yellow());
+                            wait_for_continue()?;
+                        }
+                        9 => {
+                            // Назад в главное меню
+                            break;
+                        }
+                        _ => unreachable!(), // Этого не произойдет из-за проверки в show_registers_menu
+                    }
+                }
+                continue; // Возвращаемся к главному меню
             }
             9 => {
                 println!("{}", "Завершение программы...".yellow());
