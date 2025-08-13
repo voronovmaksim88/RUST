@@ -961,6 +961,97 @@ fn show_registers() -> io::Result<()> {
     Ok(())
 }
 
+/// Сохранение регистров обратно в CSV (tags.csv)
+fn save_registers_to_csv(registers: &[RegisterConfig]) -> io::Result<()> {
+	let path = get_registers_path();
+	let mut writer = csv::WriterBuilder::new()
+		.delimiter(b';')
+		.from_path(&path)
+		.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+	// Заголовок
+	writer
+		.write_record(["name", "description", "address", "var_type", "modbus_type", "enabled"])
+		.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+	for reg in registers {
+		writer
+			.write_record([
+				reg.name.as_str(),
+				reg.description.as_str(),
+				&reg.address.to_string(),
+				reg.var_type.as_str(),
+				reg.modbus_type.as_str(),
+				if reg.enabled { "true" } else { "false" },
+			])
+			.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+	}
+
+	writer.flush().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+	Ok(())
+}
+
+/// Удаление регистра по порядковому номеру (интерактивно)
+fn delete_register() -> io::Result<()> {
+	clear_screen();
+	println!("{}", "=== Удаление регистра ===".cyan().bold());
+
+	let mut cfg = match load_registers() {
+		Ok(c) => c,
+		Err(e) => {
+			 eprintln!("{}", format!("Не удалось загрузить регистры: {}", e).red());
+			 println!("{}", "Убедитесь, что файл tags.csv существует и корректен".yellow());
+			 return Ok(());
+		}
+	};
+
+	if cfg.registers.is_empty() {
+		println!("{}", "Список регистров пуст — удалять нечего".yellow());
+		wait_for_continue()?;
+		return Ok(());
+	}
+
+	println!("\n{}", "Список регистров:".yellow());
+	for (idx, reg) in cfg.registers.iter().enumerate() {
+		println!("  {:<3} {:<20} (адрес: {:<5} тип: {:<6} modbus: {:<16})",
+			 (idx + 1).to_string().bright_black(),
+			 reg.name.cyan(),
+			 reg.address,
+			 reg.var_type.yellow(),
+			 reg.modbus_type.blue());
+	}
+
+	print!("\nВведите номер регистра для удаления (1-{}), либо 0 для отмены: ", cfg.registers.len());
+	io::stdout().flush()?;
+	let mut input = String::new();
+	io::stdin().read_line(&mut input)?;
+
+	let trimmed = input.trim();
+	let Ok(num) = trimmed.parse::<usize>() else {
+		println!("{}", "Неверный ввод. Ожидалось число.".yellow());
+		wait_for_continue()?;
+		return Ok(());
+	};
+
+	if num == 0 {
+		println!("{}", "Удаление отменено".bright_black());
+		wait_for_continue()?;
+		return Ok(());
+	}
+
+	if num < 1 || num > cfg.registers.len() {
+		println!("{}", format!("Номер вне диапазона (1-{})", cfg.registers.len()).yellow());
+		wait_for_continue()?;
+		return Ok(());
+	}
+
+	let removed = cfg.registers.remove(num - 1);
+	save_registers_to_csv(&cfg.registers)?;
+	println!("{}", format!("Регистр '{}' (адрес {}) удалён", removed.name, removed.address).green());
+	wait_for_continue()?;
+	Ok(())
+}
+
 /// Функция отображения меню регистров
 fn show_registers_menu() -> io::Result<u8> {
     clear_screen();
@@ -1064,9 +1155,8 @@ async fn main() -> io::Result<()> {
                             wait_for_continue()?;
                         }
                         2 => {
-                            // Удалить регистр (пока не реализовано)
-                            println!("{}", "Функция 'Удалить регистр' пока не реализована".yellow());
-                            wait_for_continue()?;
+                            // Удалить регистр
+                            delete_register()?;
                         }
                         3 => {
                             // Добавить регистр (пока не реализовано)
