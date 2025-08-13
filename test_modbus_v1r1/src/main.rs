@@ -1,3 +1,112 @@
+/// Добавление нового регистра (интерактивно)
+fn add_register() -> io::Result<()> {
+    clear_screen();
+    println!("{}", "=== Добавление регистра ===".cyan().bold());
+
+    // Имя
+    print!("{} ", "Какое имя регистра? (name):".yellow());
+    io::stdout().flush()?;
+    let mut name = String::new();
+    io::stdin().read_line(&mut name)?;
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        println!("{}", "Имя не может быть пустым".red());
+        wait_for_continue()?;
+        return Ok(());
+    }
+
+    // Описание
+    print!("{} ", "Описание? (description):".yellow());
+    io::stdout().flush()?;
+    let mut description = String::new();
+    io::stdin().read_line(&mut description)?;
+    let description = description.trim().to_string();
+
+    // Адрес
+    print!("{} ", "Адрес в десятичном формате? (address):".yellow());
+    io::stdout().flush()?;
+    let mut address_str = String::new();
+    io::stdin().read_line(&mut address_str)?;
+    let address = match address_str.trim().parse::<u16>() {
+        Ok(v) => v,
+        Err(_) => {
+            println!("{}", "Неверный адрес. Ожидалось число 0..65535".red());
+            wait_for_continue()?;
+            return Ok(());
+        }
+    };
+
+    // Тип переменной
+    println!("{}", "Тип переменной? (var_type)".yellow());
+    println!("  Доступно: u16, i16, u32, i32, float");
+    print!("Выберите тип: ");
+    io::stdout().flush()?;
+    let mut var_type = String::new();
+    io::stdin().read_line(&mut var_type)?;
+    let var_type = var_type.trim().to_string();
+    let allowed_var_types = ["u16", "i16", "u32", "i32", "float"];
+    if !allowed_var_types.contains(&var_type.as_str()) {
+        println!("{}", "Неверный var_type".red());
+        wait_for_continue()?;
+        return Ok(());
+    }
+
+    // Тип Modbus регистра
+    println!("{}", "Тип Modbus регистра? (modbus_type)".yellow());
+    println!("  Доступно: input_register (ф-ция чтения 0x04), holding_register (ф-ция чтения 0x03)");
+    print!("Выберите тип: ");
+    io::stdout().flush()?;
+    let mut modbus_type = String::new();
+    io::stdin().read_line(&mut modbus_type)?;
+    let modbus_type = modbus_type.trim().to_string();
+    let allowed_modbus = ["input_register", "holding_register"];
+    if !allowed_modbus.contains(&modbus_type.as_str()) {
+        println!("{}", "Неверный modbus_type".red());
+        wait_for_continue()?;
+        return Ok(());
+    }
+
+    // enabled
+    println!("{}", "Разрешено ли запрашивать этот регистр? (enabled)".yellow());
+    print!("Введите yes/true или no/false: ");
+    io::stdout().flush()?;
+    let mut enabled_str = String::new();
+    io::stdin().read_line(&mut enabled_str)?;
+    let enabled = match enabled_str.trim().to_lowercase().as_str() {
+        "true" | "yes" | "y" | "1" => true,
+        "false" | "no" | "n" | "0" => false,
+        _ => {
+            println!("{}", "Неверный ввод для enabled".red());
+            wait_for_continue()?;
+            return Ok(());
+        }
+    };
+
+    // Загрузка текущих
+    let mut cfg = match load_registers() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("{}", format!("Не удалось загрузить регистры: {}", e).red());
+            println!("{}", "Убедитесь, что файл tags.csv существует и корректен".yellow());
+            return Ok(());
+        }
+    };
+
+    // Добавляем
+    let new_reg = RegisterConfig {
+        name,
+        description,
+        address,
+        var_type,
+        modbus_type,
+        enabled,
+    };
+    cfg.registers.push(new_reg);
+    save_registers_to_csv(&cfg.registers)?;
+    println!("{}", "Регистр добавлен".green());
+    wait_for_continue()?;
+    Ok(())
+}
 use colored::*;
 use serde::{Deserialize, Serialize};
 use serialport;
@@ -963,40 +1072,40 @@ fn show_registers() -> io::Result<()> {
 
 /// Сохранение регистров обратно в CSV (tags.csv)
 fn save_registers_to_csv(registers: &[RegisterConfig]) -> io::Result<()> {
-	let path = get_registers_path();
-	let mut writer = csv::WriterBuilder::new()
-		.delimiter(b';')
-		.from_path(&path)
-		.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    let path = get_registers_path();
+    let mut writer = csv::WriterBuilder::new()
+        .delimiter(b';')
+        .from_path(&path)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
 	// Заголовок
-	writer
-		.write_record(["name", "description", "address", "var_type", "modbus_type", "enabled"])
-		.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    writer
+        .write_record(["name", "description", "address", "var_type", "modbus_type", "enabled"])
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
-	for reg in registers {
-		writer
-			.write_record([
-				reg.name.as_str(),
-				reg.description.as_str(),
-				&reg.address.to_string(),
-				reg.var_type.as_str(),
-				reg.modbus_type.as_str(),
-				if reg.enabled { "true" } else { "false" },
-			])
-			.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-	}
+    for reg in registers {
+        writer
+            .write_record([
+                reg.name.as_str(),
+                reg.description.as_str(),
+                &reg.address.to_string(),
+                reg.var_type.as_str(),
+                reg.modbus_type.as_str(),
+                if reg.enabled { "true" } else { "false" },
+            ])
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    }
 
-	writer.flush().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-	Ok(())
+    writer.flush().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    Ok(())
 }
 
 /// Удаление регистра по порядковому номеру (интерактивно)
 fn delete_register() -> io::Result<()> {
-	clear_screen();
-	println!("{}", "=== Удаление регистра ===".cyan().bold());
+    clear_screen();
+    println!("{}", "=== Удаление регистра ===".cyan().bold());
 
-	let mut cfg = match load_registers() {
+    let mut cfg = match load_registers() {
 		Ok(c) => c,
 		Err(e) => {
 			 eprintln!("{}", format!("Не удалось загрузить регистры: {}", e).red());
@@ -1005,13 +1114,13 @@ fn delete_register() -> io::Result<()> {
 		}
 	};
 
-	if cfg.registers.is_empty() {
+    if cfg.registers.is_empty() {
 		println!("{}", "Список регистров пуст — удалять нечего".yellow());
 		wait_for_continue()?;
 		return Ok(());
 	}
 
-	println!("\n{}", "Список регистров:".yellow());
+    println!("\n{}", "Список регистров:".yellow());
 	for (idx, reg) in cfg.registers.iter().enumerate() {
 		println!("  {:<3} {:<20} (адрес: {:<5} тип: {:<6} modbus: {:<16})",
 			 (idx + 1).to_string().bright_black(),
@@ -1021,35 +1130,35 @@ fn delete_register() -> io::Result<()> {
 			 reg.modbus_type.blue());
 	}
 
-	print!("\nВведите номер регистра для удаления (1-{}), либо 0 для отмены: ", cfg.registers.len());
+    print!("\nВведите номер регистра для удаления (1-{}), либо 0 для отмены: ", cfg.registers.len());
 	io::stdout().flush()?;
 	let mut input = String::new();
 	io::stdin().read_line(&mut input)?;
 
-	let trimmed = input.trim();
+    let trimmed = input.trim();
 	let Ok(num) = trimmed.parse::<usize>() else {
 		println!("{}", "Неверный ввод. Ожидалось число.".yellow());
 		wait_for_continue()?;
 		return Ok(());
 	};
 
-	if num == 0 {
+    if num == 0 {
 		println!("{}", "Удаление отменено".bright_black());
 		wait_for_continue()?;
 		return Ok(());
 	}
 
-	if num < 1 || num > cfg.registers.len() {
+    if num < 1 || num > cfg.registers.len() {
 		println!("{}", format!("Номер вне диапазона (1-{})", cfg.registers.len()).yellow());
 		wait_for_continue()?;
 		return Ok(());
 	}
 
-	let removed = cfg.registers.remove(num - 1);
-	save_registers_to_csv(&cfg.registers)?;
-	println!("{}", format!("Регистр '{}' (адрес {}) удалён", removed.name, removed.address).green());
-	wait_for_continue()?;
-	Ok(())
+    let removed = cfg.registers.remove(num - 1);
+    save_registers_to_csv(&cfg.registers)?;
+    println!("{}", format!("Регистр '{}' (адрес {}) удалён", removed.name, removed.address).green());
+    wait_for_continue()?;
+    Ok(())
 }
 
 /// Функция отображения меню регистров
@@ -1159,9 +1268,8 @@ async fn main() -> io::Result<()> {
                             delete_register()?;
                         }
                         3 => {
-                            // Добавить регистр (пока не реализовано)
-                            println!("{}", "Функция 'Добавить регистр' пока не реализована".yellow());
-                            wait_for_continue()?;
+                            // Добавить регистр
+                            add_register()?;
                         }
                         4 => {
                             // Изменить регистр (пока не реализовано)
