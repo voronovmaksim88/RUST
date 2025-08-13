@@ -50,7 +50,6 @@ struct RegisterConfig {
     name: String,
     description: String,
     address: u16,
-    quantity: u16,
     var_type: String,
     modbus_type: String,
     enabled: bool,
@@ -392,23 +391,23 @@ fn get_settings_path() -> String {
     }
 }
 
-/// Функция получения пути к файлу регистров
+/// Функция получения пути к файлу регистров (CSV)
 fn get_registers_path() -> String {
     if cfg!(debug_assertions) {
-        "registers.json".to_string()
+        "tags.csv".to_string()
     } else {
         match std::env::current_exe() {
             Ok(exe_path) => {
                 if let Some(exe_dir) = exe_path.parent() {
                     exe_dir
-                        .join("registers.json")
+                        .join("tags.csv")
                         .to_string_lossy()
                         .to_string()
                 } else {
-                    "registers.json".to_string()
+                    "tags.csv".to_string()
                 }
             }
-            Err(_) => "registers.json".to_string(),
+            Err(_) => "tags.csv".to_string(),
         }
     }
 }
@@ -422,13 +421,31 @@ fn load_settings() -> io::Result<Config> {
     Ok(config)
 }
 
-/// Функция загрузки конфигурации регистров из JSON файла
+/// Функция загрузки конфигурации регистров из CSV файла
 fn load_registers() -> io::Result<RegistersConfig> {
     let registers_path = get_registers_path();
-    let file_content = fs::read_to_string(&registers_path)?;
-    let registers_config: RegistersConfig = serde_json::from_str(&file_content)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    Ok(registers_config)
+    let file = fs::File::open(&registers_path)?;
+
+    let mut reader = csv::ReaderBuilder::new()
+        .delimiter(b';')
+        .has_headers(true)
+        .from_reader(file);
+
+    let mut registers: Vec<RegisterConfig> = Vec::new();
+    for record in reader.deserialize::<RegisterConfig>() {
+        match record {
+            Ok(register) => registers.push(register),
+            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
+        }
+    }
+
+    let metadata = Metadata {
+        last_updated: chrono::Utc::now().to_rfc3339(),
+        version: "csv-1.0".to_string(),
+        description: "Конфигурация регистров из CSV (tags.csv)".to_string(),
+    };
+
+    Ok(RegistersConfig { registers, metadata })
 }
 
 /// Функция сохранения настроек в JSON файл
@@ -575,6 +592,15 @@ fn process_register_data(data: &[u16], register: &RegisterConfig) -> String {
     }
 }
 
+/// Вычисляет количество 16-битных регистров для чтения по типу переменной
+fn compute_quantity(var_type: &str) -> u16 {
+    match var_type {
+        "u16" | "i16" => 1,
+        "u32" | "i32" | "float" => 2,
+        _ => 1,
+    }
+}
+
 /// Функция изменения настроек связи
 fn change_connection_settings() -> io::Result<()> {
     clear_screen();
@@ -674,7 +700,7 @@ async fn start_polling() -> io::Result<()> {
         }
         Err(e) => {
             eprintln!("{}", format!("Ошибка загрузки конфигурации регистров: {}", e).red());
-            println!("{}", "Убедитесь, что файл registers.json существует и корректен".yellow());
+            println!("{}", "Убедитесь, что файл tags.csv существует и корректен".yellow());
             return Err(e);
         }
     };
@@ -687,7 +713,7 @@ async fn start_polling() -> io::Result<()> {
 
     if enabled_registers.is_empty() {
         println!("{}", "Нет активных регистров для опроса!".red());
-        println!("{}", "Проверьте файл registers.json и убедитесь, что есть регистры с enabled: true".yellow());
+            println!("{}", "Проверьте файл tags.csv и убедитесь, что есть регистры с enabled: true".yellow());
         return Ok(());
     }
 
@@ -712,11 +738,12 @@ async fn start_polling() -> io::Result<()> {
     
     println!("\nАктивные регистры для опроса:");
     for register in &enabled_registers {
+        let qty = compute_quantity(&register.var_type);
         println!("  {} (адрес: {}, тип: {}, количество: {})", 
                  register.name.cyan(), 
                  register.address, 
                  register.var_type.yellow(), 
-                 register.quantity);
+                 qty);
     }
     println!();
 
@@ -803,16 +830,18 @@ async fn start_polling() -> io::Result<()> {
         for register in &enabled_registers {
             let result = match register.modbus_type.as_str() {
                 "input_register" => {
+                    let qty = compute_quantity(&register.var_type);
                     tokio::time::timeout(
                         timeout_duration,
-                        ctx.read_input_registers(register.address, register.quantity),
+                        ctx.read_input_registers(register.address, qty),
                     )
                     .await
                 }
                 "holding_register" => {
+                    let qty = compute_quantity(&register.var_type);
                     tokio::time::timeout(
                         timeout_duration,
-                        ctx.read_holding_registers(register.address, register.quantity),
+                        ctx.read_holding_registers(register.address, qty),
                     )
                     .await
                 }
@@ -886,8 +915,8 @@ fn show_registers() -> io::Result<()> {
             } else {
                 println!("\n{}", "Список регистров:".yellow());
                 println!("{}", "─".repeat(120));
-                println!("{:<3} {:<20} {:<40} {:<8} {:<8} {:<10} {:<20} {:<10}",
-                         "#", "Имя", "Описание", "Адрес", "Кол-во", "Тип", "Modbus тип", "Статус");
+                println!("{:<3} {:<20} {:<40} {:<8} {:<10} {:<20} {:<10}",
+                         "#", "Имя", "Описание", "Адрес", "Тип", "Modbus тип", "Статус");
                 println!("{}", "─".repeat(120));
                 
                 for (index, register) in registers_config.registers.iter().enumerate() {
@@ -911,12 +940,11 @@ fn show_registers() -> io::Result<()> {
                         register.description.clone()
                     };
                     
-                    println!("{:<3} {:<20} {:<40} {:<8} {:<8} {:<10} {:<20} {}", 
+                    println!("{:<3} {:<20} {:<40} {:<8} {:<10} {:<20} {}", 
                              (index + 1).to_string().bright_black(),
                              name.cyan(),
                              description,
                              register.address.to_string().bright_white(),
-                             register.quantity.to_string().bright_white(),
                              register.var_type.yellow(),
                              register.modbus_type.blue(),
                              status);
@@ -926,7 +954,7 @@ fn show_registers() -> io::Result<()> {
         }
         Err(e) => {
             eprintln!("{}", format!("Ошибка загрузки регистров: {}", e).red());
-            println!("{}", "Убедитесь, что файл registers.json существует и корректен".yellow());
+            println!("{}", "Убедитесь, что файл tags.csv существует и корректен".yellow());
         }
     }
 

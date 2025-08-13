@@ -1,0 +1,5 @@
+name;description;address;var_type;modbus_type;enabled
+Temperature;Температура устройства;22;i32;input_register;true
+Pressure;Давление в системе;24;i32;input_register;true
+Status;Статус устройства;26;u16;input_register;true
+Config_Value;Конфигурационное значение;100;u16;holding_register;false
