@@ -669,7 +669,7 @@ fn process_register_data(data: &[u16], register: &RegisterConfig) -> String {
         }
         "u16" => {
             if data.len() >= 1 {
-                format!("{} (0x{:04X})", data[0], data[0])
+                format!("{}", data[0])
             } else {
                 "Недостаточно данных".to_string()
             }
@@ -677,7 +677,7 @@ fn process_register_data(data: &[u16], register: &RegisterConfig) -> String {
         "i16" => {
             if data.len() >= 1 {
                 let value = data[0] as i16;
-                format!("{} (0x{:04X})", value, data[0])
+                format!("{}", value)
             } else {
                 "Недостаточно данных".to_string()
             }
@@ -691,9 +691,9 @@ fn process_register_data(data: &[u16], register: &RegisterConfig) -> String {
                 
                 if register.var_type == "i32" {
                     let value = combined as i32;
-                    format!("{} (0x{:08X})", value, combined)
+                    format!("{}", value)
                 } else {
-                    format!("{} (0x{:08X})", combined, combined)
+                    format!("{}", combined)
                 }
             } else {
                 "Недостаточно данных".to_string()
@@ -706,15 +706,15 @@ fn process_register_data(data: &[u16], register: &RegisterConfig) -> String {
                 let low_word = data[0] as u32;
                 let combined = (high_word << 16) | low_word;
                 let value = f32::from_bits(combined);
-                format!("{:.3} (0x{:08X})", value, combined)
+                format!("{:.3}", value)
             } else {
                 "Недостаточно данных".to_string()
             }
         }
         _ => {
             // Неизвестный тип - показываем как массив u16
-            let hex_values: Vec<String> = data.iter().map(|&x| format!("0x{:04X}", x)).collect();
-            format!("[{}]", hex_values.join(", "))
+            let values: Vec<String> = data.iter().map(|&x| format!("{}", x)).collect();
+            format!("[{}]", values.join(", "))
         }
     }
 }
