@@ -636,6 +636,15 @@ fn print_register_result<T, E, F>(
     }
 }
 
+/// Форматирование значения для булевых регистров (coil/discrete_input)
+fn format_bool_value(data: Vec<bool>) -> String {
+    if data.first().copied().unwrap_or(false) {
+        "true".to_string()
+    } else {
+        "false".to_string()
+    }
+}
+
 /// Функция изменения настроек связи
 fn change_connection_settings() -> io::Result<()> {
     clear_screen();
@@ -896,9 +905,7 @@ async fn start_polling() -> io::Result<()> {
                     )
                     .await;
 
-                    print_register_result(register, result, |data: Vec<bool>| {
-                        if !data.is_empty() && data[0] { "true".to_string() } else { "false".to_string() }
-                    }, &mut all_success);
+                    print_register_result(register, result, format_bool_value, &mut all_success);
                 }
                 "discrete_input" => {
                     let qty: u16 = 1;
@@ -908,9 +915,7 @@ async fn start_polling() -> io::Result<()> {
                     )
                     .await;
 
-                    print_register_result(register, result, |data: Vec<bool>| {
-                        if !data.is_empty() && data[0] { "true".to_string() } else { "false".to_string() }
-                    }, &mut all_success);
+                    print_register_result(register, result, format_bool_value, &mut all_success);
                 }
                 _ => {
                     println!("Неизвестный тип регистра: {}", register.modbus_type.red());
