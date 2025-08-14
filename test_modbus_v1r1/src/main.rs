@@ -38,18 +38,29 @@ fn add_register() -> io::Result<()> {
 
     // Тип переменной
     println!("{}", "Тип переменной? (var_type)".yellow());
-    println!("  Доступно: u16, i16, u32, i32, float");
-    print!("Выберите тип: ");
+    println!("  1. bool");
+    println!("  2. u16");
+    println!("  3. i16");
+    println!("  4. u32");
+    println!("  5. i32");
+    println!("  6. float");
+    print!("Введите номер (1-6): ");
     io::stdout().flush()?;
-    let mut var_type = String::new();
-    io::stdin().read_line(&mut var_type)?;
-    let var_type = var_type.trim().to_string();
-    let allowed_var_types = ["u16", "i16", "u32", "i32", "float"];
-    if !allowed_var_types.contains(&var_type.as_str()) {
-        println!("{}", "Неверный var_type".red());
-        wait_for_continue()?;
-        return Ok(());
-    }
+    let mut var_choice = String::new();
+    io::stdin().read_line(&mut var_choice)?;
+    let var_type = match var_choice.trim() {
+        "1" => "bool".to_string(),
+        "2" => "u16".to_string(),
+        "3" => "i16".to_string(),
+        "4" => "u32".to_string(),
+        "5" => "i32".to_string(),
+        "6" => "float".to_string(),
+        _ => {
+            println!("{}", "Неверный выбор var_type".red());
+            wait_for_continue()?;
+            return Ok(());
+        }
+    };
 
     // Тип Modbus регистра
     println!("{}", "Тип Modbus регистра? (modbus_type)".yellow());
@@ -649,6 +660,13 @@ fn wait_for_continue() -> io::Result<()> {
 /// Функция для обработки данных регистра в зависимости от типа
 fn process_register_data(data: &[u16], register: &RegisterConfig) -> String {
     match register.var_type.as_str() {
+        "bool" => {
+            if data.len() >= 1 {
+                if data[0] != 0 { "true".to_string() } else { "false".to_string() }
+            } else {
+                "Недостаточно данных".to_string()
+            }
+        }
         "u16" => {
             if data.len() >= 1 {
                 format!("{} (0x{:04X})", data[0], data[0])
@@ -704,7 +722,7 @@ fn process_register_data(data: &[u16], register: &RegisterConfig) -> String {
 /// Вычисляет количество 16-битных регистров для чтения по типу переменной
 fn compute_quantity(var_type: &str) -> u16 {
     match var_type {
-        "u16" | "i16" => 1,
+        "bool" | "u16" | "i16" => 1,
         "u32" | "i32" | "float" => 2,
         _ => 1,
     }
