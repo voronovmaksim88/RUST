@@ -73,20 +73,27 @@ pub fn add_register() -> io::Result<()> {
 		}
 	};
 
-	// Тип Modbus регистра
-	println!("{}", "Тип Modbus регистра? (modbus_type)".yellow());
-	println!("  Доступно: input_register (ф-ция чтения 0x04), holding_register (ф-ция чтения 0x03), coil (ф-ция чтения 0x01), discrete_input (ф-ция чтения 0x02)");
-	print!("Выберите тип: ");
-	io::stdout().flush()?;
-	let mut modbus_type = String::new();
-	io::stdin().read_line(&mut modbus_type)?;
-	let modbus_type = modbus_type.trim().to_string();
-	let allowed_modbus = ["input_register", "holding_register", "coil", "discrete_input"];
-	if !allowed_modbus.contains(&modbus_type.as_str()) {
-		println!("{}", "Неверный modbus_type".red());
-		wait_for_continue()?;
-		return Ok(());
-	}
+    // Тип Modbus регистра
+    println!("{}", "Тип Modbus регистра? (modbus_type)".yellow());
+    println!("  1. input_register (ф-ция чтения 0x04)");
+    println!("  2. holding_register (ф-ция чтения 0x03)");
+    println!("  3. coil (ф-ция чтения 0x01)");
+    println!("  4. discrete_input (ф-ция чтения 0x02)");
+    print!("Введите номер (1-4): ");
+    io::stdout().flush()?;
+    let mut modbus_choice = String::new();
+    io::stdin().read_line(&mut modbus_choice)?;
+    let modbus_type = match modbus_choice.trim() {
+        "1" => "input_register".to_string(),
+        "2" => "holding_register".to_string(),
+        "3" => "coil".to_string(),
+        "4" => "discrete_input".to_string(),
+        _ => {
+            println!("{}", "Неверный выбор modbus_type".red());
+            wait_for_continue()?;
+            return Ok(());
+        }
+    };
 
 	// enabled
 	println!("{}", "Разрешено ли запрашивать этот регистр? (enabled)".yellow());
