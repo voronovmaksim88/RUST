@@ -450,6 +450,18 @@ fn load_registers() -> io::Result<RegistersConfig> {
     Ok(RegistersConfig { registers, metadata })
 }
 
+/// Загрузка регистров с единообразным уведомлением об ошибке
+fn load_registers_or_warn() -> Option<RegistersConfig> {
+    match load_registers() {
+        Ok(c) => Some(c),
+        Err(e) => {
+            eprintln!("{}", format!("Не удалось загрузить регистры: {}", e).red());
+            println!("{}", "Убедитесь, что файл tags.csv существует и корректен".yellow());
+            None
+        }
+    }
+}
+
 /// Функция сохранения настроек в JSON файл
 fn save_settings(connection: ConnectionSettings) -> io::Result<()> {
     let metadata = Metadata {
@@ -1053,12 +1065,10 @@ fn delete_register() -> io::Result<()> {
     clear_screen();
     println!("{}", "=== Удаление регистра ===".cyan().bold());
 
-    let mut cfg = match load_registers() {
-		Ok(c) => c,
-		Err(e) => {
-			 eprintln!("{}", format!("Не удалось загрузить регистры: {}", e).red());
-			 println!("{}", "Убедитесь, что файл tags.csv существует и корректен".yellow());
-			 return Ok(());
+    let mut cfg = match load_registers_or_warn() {
+		Some(c) => c,
+		None => {
+			return Ok(());
 		}
 	};
 

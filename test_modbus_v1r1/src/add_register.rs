@@ -4,7 +4,7 @@ use std::io::{self, Write};
 use crate::{
 	clear_screen,
 	wait_for_continue,
-	load_registers,
+	load_registers_or_warn,
 	save_registers_to_csv,
 	RegisterConfig,
 };
@@ -105,11 +105,9 @@ pub fn add_register() -> io::Result<()> {
 	};
 
 	// Загрузка текущих
-	let mut cfg = match load_registers() {
-		Ok(c) => c,
-		Err(e) => {
-			eprintln!("{}", format!("Не удалось загрузить регистры: {}", e).red());
-			println!("{}", "Убедитесь, что файл tags.csv существует и корректен".yellow());
+	let mut cfg = match load_registers_or_warn() {
+		Some(c) => c,
+		None => {
 			return Ok(());
 		}
 	};
