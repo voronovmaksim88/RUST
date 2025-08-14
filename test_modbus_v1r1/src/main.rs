@@ -64,13 +64,13 @@ fn add_register() -> io::Result<()> {
 
     // Тип Modbus регистра
     println!("{}", "Тип Modbus регистра? (modbus_type)".yellow());
-    println!("  Доступно: input_register (ф-ция чтения 0x04), holding_register (ф-ция чтения 0x03)");
+    println!("  Доступно: input_register (ф-ция чтения 0x04), holding_register (ф-ция чтения 0x03), coil (ф-ция чтения 0x01), discrete_input (ф-ция чтения 0x02)");
     print!("Выберите тип: ");
     io::stdout().flush()?;
     let mut modbus_type = String::new();
     io::stdin().read_line(&mut modbus_type)?;
     let modbus_type = modbus_type.trim().to_string();
-    let allowed_modbus = ["input_register", "holding_register"];
+    let allowed_modbus = ["input_register", "holding_register", "coil", "discrete_input"];
     if !allowed_modbus.contains(&modbus_type.as_str()) {
         println!("{}", "Неверный modbus_type".red());
         wait_for_continue()?;
@@ -955,41 +955,102 @@ async fn start_polling() -> io::Result<()> {
 
         // Опрашиваем каждый активный регистр
         for register in &enabled_registers {
-            let result = match register.modbus_type.as_str() {
+            match register.modbus_type.as_str() {
                 "input_register" => {
                     let qty = compute_quantity(&register.var_type);
-                    tokio::time::timeout(
+                    let result = tokio::time::timeout(
                         timeout_duration,
                         ctx.read_input_registers(register.address, qty),
                     )
-                    .await
+                    .await;
+
+                    match result {
+                        Ok(Ok(data)) => {
+                            let processed_value = process_register_data(&data, register);
+                            print!("{}: {} | ", register.name.cyan(), processed_value.green());
+                        }
+                        Ok(Err(e)) => {
+                            print!("{}: {} | ", register.name.cyan(), format!("Ошибка: {:?}", e).red());
+                            all_success = false;
+                        }
+                        Err(_) => {
+                            print!("{}: {} | ", register.name.cyan(), "Таймаут".red());
+                            all_success = false;
+                        }
+                    }
                 }
                 "holding_register" => {
                     let qty = compute_quantity(&register.var_type);
-                    tokio::time::timeout(
+                    let result = tokio::time::timeout(
                         timeout_duration,
                         ctx.read_holding_registers(register.address, qty),
                     )
-                    .await
+                    .await;
+
+                    match result {
+                        Ok(Ok(data)) => {
+                            let processed_value = process_register_data(&data, register);
+                            print!("{}: {} | ", register.name.cyan(), processed_value.green());
+                        }
+                        Ok(Err(e)) => {
+                            print!("{}: {} | ", register.name.cyan(), format!("Ошибка: {:?}", e).red());
+                            all_success = false;
+                        }
+                        Err(_) => {
+                            print!("{}: {} | ", register.name.cyan(), "Таймаут".red());
+                            all_success = false;
+                        }
+                    }
+                }
+                "coil" => {
+                    let qty: u16 = 1;
+                    let result = tokio::time::timeout(
+                        timeout_duration,
+                        ctx.read_coils(register.address, qty),
+                    )
+                    .await;
+
+                    match result {
+                        Ok(Ok(data)) => {
+                            let value_str = if !data.is_empty() && data[0] { "true" } else { "false" };
+                            print!("{}: {} | ", register.name.cyan(), value_str.green());
+                        }
+                        Ok(Err(e)) => {
+                            print!("{}: {} | ", register.name.cyan(), format!("Ошибка: {:?}", e).red());
+                            all_success = false;
+                        }
+                        Err(_) => {
+                            print!("{}: {} | ", register.name.cyan(), "Таймаут".red());
+                            all_success = false;
+                        }
+                    }
+                }
+                "discrete_input" => {
+                    let qty: u16 = 1;
+                    let result = tokio::time::timeout(
+                        timeout_duration,
+                        ctx.read_discrete_inputs(register.address, qty),
+                    )
+                    .await;
+
+                    match result {
+                        Ok(Ok(data)) => {
+                            let value_str = if !data.is_empty() && data[0] { "true" } else { "false" };
+                            print!("{}: {} | ", register.name.cyan(), value_str.green());
+                        }
+                        Ok(Err(e)) => {
+                            print!("{}: {} | ", register.name.cyan(), format!("Ошибка: {:?}", e).red());
+                            all_success = false;
+                        }
+                        Err(_) => {
+                            print!("{}: {} | ", register.name.cyan(), "Таймаут".red());
+                            all_success = false;
+                        }
+                    }
                 }
                 _ => {
                     println!("Неизвестный тип регистра: {}", register.modbus_type.red());
                     continue;
-                }
-            };
-
-            match result {
-                Ok(Ok(data)) => {
-                    let processed_value = process_register_data(&data, register);
-                    print!("{}: {} | ", register.name.cyan(), processed_value.green());
-                }
-                Ok(Err(e)) => {
-                    print!("{}: {} | ", register.name.cyan(), format!("Ошибка: {:?}", e).red());
-                    all_success = false;
-                }
-                Err(_) => {
-                    print!("{}: {} | ", register.name.cyan(), "Таймаут".red());
-                    all_success = false;
                 }
             }
         }
