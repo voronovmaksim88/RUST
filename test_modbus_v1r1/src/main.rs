@@ -1129,16 +1129,17 @@ fn show_registers_menu() -> io::Result<u8> {
     println!("  {} - Удалить регистр", "2".red());
     println!("  {} - Добавить регистр", "3".blue());
     println!("  {} - Изменить регистр", "4".magenta());
+    println!("  {} - Отсортировать по адресу", "5".cyan());
     println!("  {} - Назад в главное меню", "9".bright_black());
 
-    print!("\nВаш выбор (1-4, 9): ");
+    print!("\nВаш выбор (1-5, 9): ");
     io::stdout().flush()?;
 
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
 
     match input.trim().parse::<u8>() {
-        Ok(1) | Ok(2) | Ok(3) | Ok(4) | Ok(9) => Ok(input.trim().parse().unwrap()),
+        Ok(1) | Ok(2) | Ok(3) | Ok(4) | Ok(5) | Ok(9) => Ok(input.trim().parse().unwrap()),
         _ => {
             println!(
                 "{}",
@@ -1233,6 +1234,18 @@ async fn main() -> io::Result<()> {
                         4 => {
                             // Изменить регистр (пока не реализовано)
                             println!("{}", "Функция 'Изменить регистр' пока не реализована".yellow());
+                            wait_for_continue()?;
+                        }
+                        5 => {
+                            // Отсортировать по адресу
+                            match sort_registers::sort_registers_by_address() {
+                                Ok(()) => {
+                                    println!("{}", "Сортировка завершена".green());
+                                }
+                                Err(e) => {
+                                    eprintln!("{}", format!("Ошибка сортировки: {}", e).red());
+                                }
+                            }
                             wait_for_continue()?;
                         }
                         9 => {
