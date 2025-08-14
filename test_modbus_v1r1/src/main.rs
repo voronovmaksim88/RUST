@@ -610,6 +610,32 @@ fn compute_quantity(var_type: &str) -> u16 {
     }
 }
 
+/// Единообразная обработка результата чтения регистра с таймаутом
+fn print_register_result<T, E, F>(
+    register: &RegisterConfig,
+    result: Result<Result<T, E>, tokio::time::error::Elapsed>,
+    mut format_ok: F,
+    all_success: &mut bool,
+) where
+    E: std::fmt::Debug,
+    F: FnMut(T) -> String,
+{
+    match result {
+        Ok(Ok(data)) => {
+            let processed_value = format_ok(data);
+            print!("{}: {} | ", register.name.cyan(), processed_value.green());
+        }
+        Ok(Err(e)) => {
+            print!("{}: {} | ", register.name.cyan(), format!("Ошибка: {:?}", e).red());
+            *all_success = false;
+        }
+        Err(_) => {
+            print!("{}: {} | ", register.name.cyan(), "Таймаут".red());
+            *all_success = false;
+        }
+    }
+}
+
 /// Функция изменения настроек связи
 fn change_connection_settings() -> io::Result<()> {
     clear_screen();
@@ -846,20 +872,9 @@ async fn start_polling() -> io::Result<()> {
                     )
                     .await;
 
-                    match result {
-                        Ok(Ok(data)) => {
-                            let processed_value = process_register_data(&data, register);
-                            print!("{}: {} | ", register.name.cyan(), processed_value.green());
-                        }
-                        Ok(Err(e)) => {
-                            print!("{}: {} | ", register.name.cyan(), format!("Ошибка: {:?}", e).red());
-                            all_success = false;
-                        }
-                        Err(_) => {
-                            print!("{}: {} | ", register.name.cyan(), "Таймаут".red());
-                            all_success = false;
-                        }
-                    }
+                    print_register_result(register, result, |data: Vec<u16>| {
+                        process_register_data(&data, register)
+                    }, &mut all_success);
                 }
                 "holding_register" => {
                     let qty = compute_quantity(&register.var_type);
@@ -869,20 +884,9 @@ async fn start_polling() -> io::Result<()> {
                     )
                     .await;
 
-                    match result {
-                        Ok(Ok(data)) => {
-                            let processed_value = process_register_data(&data, register);
-                            print!("{}: {} | ", register.name.cyan(), processed_value.green());
-                        }
-                        Ok(Err(e)) => {
-                            print!("{}: {} | ", register.name.cyan(), format!("Ошибка: {:?}", e).red());
-                            all_success = false;
-                        }
-                        Err(_) => {
-                            print!("{}: {} | ", register.name.cyan(), "Таймаут".red());
-                            all_success = false;
-                        }
-                    }
+                    print_register_result(register, result, |data: Vec<u16>| {
+                        process_register_data(&data, register)
+                    }, &mut all_success);
                 }
                 "coil" => {
                     let qty: u16 = 1;
@@ -892,20 +896,9 @@ async fn start_polling() -> io::Result<()> {
                     )
                     .await;
 
-                    match result {
-                        Ok(Ok(data)) => {
-                            let value_str = if !data.is_empty() && data[0] { "true" } else { "false" };
-                            print!("{}: {} | ", register.name.cyan(), value_str.green());
-                        }
-                        Ok(Err(e)) => {
-                            print!("{}: {} | ", register.name.cyan(), format!("Ошибка: {:?}", e).red());
-                            all_success = false;
-                        }
-                        Err(_) => {
-                            print!("{}: {} | ", register.name.cyan(), "Таймаут".red());
-                            all_success = false;
-                        }
-                    }
+                    print_register_result(register, result, |data: Vec<bool>| {
+                        if !data.is_empty() && data[0] { "true".to_string() } else { "false".to_string() }
+                    }, &mut all_success);
                 }
                 "discrete_input" => {
                     let qty: u16 = 1;
@@ -915,20 +908,9 @@ async fn start_polling() -> io::Result<()> {
                     )
                     .await;
 
-                    match result {
-                        Ok(Ok(data)) => {
-                            let value_str = if !data.is_empty() && data[0] { "true" } else { "false" };
-                            print!("{}: {} | ", register.name.cyan(), value_str.green());
-                        }
-                        Ok(Err(e)) => {
-                            print!("{}: {} | ", register.name.cyan(), format!("Ошибка: {:?}", e).red());
-                            all_success = false;
-                        }
-                        Err(_) => {
-                            print!("{}: {} | ", register.name.cyan(), "Таймаут".red());
-                            all_success = false;
-                        }
-                    }
+                    print_register_result(register, result, |data: Vec<bool>| {
+                        if !data.is_empty() && data[0] { "true".to_string() } else { "false".to_string() }
+                    }, &mut all_success);
                 }
                 _ => {
                     println!("Неизвестный тип регистра: {}", register.modbus_type.red());
