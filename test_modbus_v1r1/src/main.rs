@@ -1,4 +1,5 @@
 mod add_register;
+mod sort_registers;
 use add_register::add_register;
 use colored::*;
 use serde::{Deserialize, Serialize};
