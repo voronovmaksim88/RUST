@@ -97,15 +97,17 @@ pub fn add_register() -> io::Result<()> {
 
 	// enabled
 	println!("{}", "Разрешено ли запрашивать этот регистр? (enabled)".yellow());
-	print!("Введите yes/true или no/false: ");
+	println!("  1. Да (True)");
+	println!("  2. Нет (False)");
+	print!("Введите номер (1-2): ");
 	io::stdout().flush()?;
-	let mut enabled_str = String::new();
-	io::stdin().read_line(&mut enabled_str)?;
-	let enabled = match enabled_str.trim().to_lowercase().as_str() {
-		"true" | "yes" | "y" | "1" => true,
-		"false" | "no" | "n" | "0" => false,
+	let mut enabled_choice = String::new();
+	io::stdin().read_line(&mut enabled_choice)?;
+	let enabled = match enabled_choice.trim().to_lowercase().as_str() {
+		"1" | "да" | "y" | "yes" | "true" => true,
+		"2" | "нет" | "n" | "no" | "false" => false,
 		_ => {
-			println!("{}", "Неверный ввод для enabled".red());
+			println!("{}", "Неверный выбор для enabled".red());
 			wait_for_continue()?;
 			return Ok(());
 		}
