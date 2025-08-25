@@ -1,0 +1,26 @@
+{
+  "project": {
+    "name": "My Tauri Project",
+    "author": "Developer",
+    "log": {
+      "records": [
+        {
+          "date": "2024-01-15",
+          "text": "Initial project setup with Tauri and Vue"
+        },
+        {
+          "date": "2024-01-16",
+          "text": "Added project tree component and sidebar"
+        },
+        {
+          "date": "2024-01-17",
+          "text": "Implemented port scanner functionality"
+        },
+        {
+          "date": "2024-01-18",
+          "text": "Created project structure in JSON format"
+        }
+      ]
+    }
+  }
+}
