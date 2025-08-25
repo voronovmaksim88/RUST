@@ -1,31 +1,52 @@
 <script setup lang="ts">
-// Здесь можно добавить логику для отображения дерева проекта
-</script>
+interface Props {
+  fileName: string
+}
 
+defineProps<Props>()
+</script>
 
 <template>
   <div class="project-tree">
     <div class="tree-container">
-      <!-- Здесь будет содержимое дерева проекта -->
+      <div class="file-item">
+        <span class="file-icon">📄</span>
+        <span class="file-name">{{ fileName }}</span>
+      </div>
     </div>
   </div>
 </template>
 
-
 <style scoped>
 .project-tree {
-  padding: 1rem;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  margin: 1rem 0;
+  padding: 0;
 }
 
 .tree-container {
-  margin-top: 1rem;
+  margin: 0;
 }
 
-h3 {
-  margin: 0 0 1rem 0;
-  color: #333;
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.file-item:hover {
+  background-color: #e9ecef;
+}
+
+.file-icon {
+  font-size: 1.2rem;
+}
+
+.file-name {
+  font-size: 0.9rem;
+  color: #495057;
+  font-weight: 500;
 }
 </style>
