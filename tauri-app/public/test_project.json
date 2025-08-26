@@ -23,6 +23,16 @@
       ]
     },
     "devices": {
+      "device1": {
+        "name": "Arduino Uno",
+        "type": "microcontroller",
+        "port": "COM3"
+      },
+      "device2": {
+        "name": "Raspberry Pi",
+        "type": "single-board computer",
+        "port": "COM4"
+      }
     }
   }
 }
