@@ -21,6 +21,8 @@
           "text": "Created project structure in JSON format"
         }
       ]
+    },
+    "devices": {
     }
   }
 }
