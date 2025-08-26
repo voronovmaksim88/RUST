@@ -84,8 +84,10 @@ onMounted(() => {
                   class="tree-item device-detail"
                 >
                   <span class="item-icon">📱</span>
-                  <span class="item-name">{{ device.name }}</span>
-                  <span class="device-type">({{ device.type }})</span>
+                  <div class="device-info">
+                    <span class="device-name">{{ device.name }}</span>
+                    <span class="device-type">{{ device.type }}</span>
+                  </div>
                 </div>
               </div>
               <div v-else class="tree-item empty-item">
@@ -172,14 +174,26 @@ onMounted(() => {
 
 .device-detail {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
   padding: 0.25rem 0.5rem;
   margin-left: 0.5rem;
 }
 
+.device-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.device-name {
+  font-size: 0.9rem;
+  color: #495057;
+  font-weight: 500;
+}
+
 .device-type {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: #6c757d;
   font-style: italic;
 }
