@@ -1,7 +1,28 @@
 {
   "project": {
-    "name": "My Tauri Project",
     "author": "Developer",
+    "devices": {
+      "device1": {
+        "name": "r",
+        "port": "COM3",
+        "type": "microcontroller"
+      },
+      "device2": {
+        "name": "Arduino Uno",
+        "port": "COM3",
+        "type": "microcontroller"
+      },
+      "device3": {
+        "name": "rуууу",
+        "port": "COM3",
+        "type": "single-board computer"
+      },
+      "device4": {
+        "name": "r",
+        "port": "COM3",
+        "type": "sensor"
+      }
+    },
     "log": {
       "records": [
         {
@@ -22,17 +43,6 @@
         }
       ]
     },
-    "devices": {
-      "device1": {
-        "name": "Arduino Uno",
-        "type": "microcontroller",
-        "port": "COM3"
-      },
-      "device2": {
-        "name": "Raspberry Pi",
-        "type": "single-board computer",
-        "port": "COM4"
-      }
-    }
+    "name": "My Tauri Project"
   }
 }

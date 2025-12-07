@@ -33,6 +33,10 @@ const isDevicesExpanded = ref(true)
 
 const loadProjectData = async () => {
   try {
+    // Debug: check file path
+    const debugPath = await invoke('get_project_file_path_debug')
+    console.log('Debug:', debugPath)
+
     const data = await invoke('load_project_data')
     projectData.value = data
   } catch (error) {
@@ -76,6 +80,12 @@ const devicesHeaderContextMenu = ref<{
 })
 
 const showCreateDeviceModal = ref(false)
+
+const newDeviceForm = ref({
+  name: '',
+  type: '',
+  port: ''
+})
 
 const showContextMenu = (event: MouseEvent, deviceKey: string) => {
   event.preventDefault()
@@ -123,6 +133,52 @@ const openCreateDeviceModal = () => {
 
 const closeCreateDeviceModal = () => {
   showCreateDeviceModal.value = false
+  // Reset form
+  newDeviceForm.value = {
+    name: '',
+    type: '',
+    port: ''
+  }
+}
+
+const createDevice = async () => {
+  if (!projectData.value?.project?.devices) return
+
+  // Validate form
+  if (!newDeviceForm.value.name.trim() || !newDeviceForm.value.type.trim() || !newDeviceForm.value.port.trim()) {
+    alert('Пожалуйста, заполните все поля')
+    return
+  }
+
+  try {
+    // Generate unique device key
+    const deviceKeys = Object.keys(projectData.value.project.devices)
+    let deviceKey = 'device1'
+    let counter = 1
+    while (deviceKeys.includes(deviceKey)) {
+      counter++
+      deviceKey = `device${counter}`
+    }
+
+    // Add new device to local data
+    projectData.value.project.devices[deviceKey] = {
+      name: newDeviceForm.value.name.trim(),
+      type: newDeviceForm.value.type.trim(),
+      port: newDeviceForm.value.port.trim()
+    }
+
+    // Save updated data using Tauri command
+    const result = await invoke('save_project_data', {
+      data: projectData.value
+    })
+
+    console.log(`Device created successfully:`, result)
+    closeCreateDeviceModal()
+  } catch (error) {
+    console.error('Error creating device:', error)
+    // Reload data to revert changes
+    await loadProjectData()
+  }
 }
 
 const deleteDevice = async (deviceKey: string) => {
@@ -241,12 +297,53 @@ onMounted(() => {
         <button class="modal-close" @click="closeCreateDeviceModal">×</button>
       </div>
       <div class="modal-body">
-        <p>Здесь будет форма создания устройства...</p>
-        <p>Пока что это заглушка 🚧</p>
+        <form @submit.prevent="createDevice">
+          <div class="form-group">
+            <label for="deviceName">Название устройства:</label>
+            <input
+              id="deviceName"
+              v-model="newDeviceForm.name"
+              type="text"
+              class="form-control"
+              placeholder="Например: Arduino Uno"
+              required
+            >
+          </div>
+
+          <div class="form-group">
+            <label for="deviceType">Тип устройства:</label>
+            <select
+              id="deviceType"
+              v-model="newDeviceForm.type"
+              class="form-control"
+              required
+            >
+              <option value="">Выберите тип устройства</option>
+              <option value="microcontroller">Микроконтроллер</option>
+              <option value="single-board computer">Одноплатный компьютер</option>
+              <option value="sensor">Датчик</option>
+              <option value="actuator">Исполнительное устройство</option>
+              <option value="module">Модуль</option>
+              <option value="other">Другое</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="devicePort">Порт подключения:</label>
+            <input
+              id="devicePort"
+              v-model="newDeviceForm.port"
+              type="text"
+              class="form-control"
+              placeholder="Например: COM3, /dev/ttyUSB0"
+              required
+            >
+          </div>
+        </form>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" @click="closeCreateDeviceModal">Отмена</button>
-        <button class="btn btn-primary">Создать</button>
+        <button class="btn btn-primary" @click="createDevice">Создать</button>
       </div>
     </div>
   </div>
@@ -509,5 +606,35 @@ onMounted(() => {
 
 .btn-primary:hover {
   background: #0056b3;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #495057;
+}
+
+.form-control {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.form-control::placeholder {
+  color: #6c757d;
 }
 </style>
