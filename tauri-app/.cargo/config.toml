@@ -1,0 +1,16 @@
+[target.x86_64-pc-windows-gnu]
+linker = "C:\\msys64\\mingw64\\bin\\x86_64-w64-mingw32-gcc.exe"
+ar = "C:\\msys64\\mingw64\\bin\\x86_64-w64-mingw32-ar.exe"
+
+[env]
+# Add MSYS2 tools to PATH
+PATH = { value = "C:\\msys64\\mingw64\\bin;C:\\msys64\\usr\\bin", relative = true }
+
+# Set environment variables for build tools
+CC_x86_64_pc_windows_gnu = "C:\\msys64\\mingw64\\bin\\x86_64-w64-mingw32-gcc.exe"
+CXX_x86_64_pc_windows_gnu = "C:\\msys64\\mingw64\\bin\\x86_64-w64-mingw32-g++.exe"
+AR_x86_64_pc_windows_gnu = "C:\\msys64\\mingw64\\bin\\x86_64-w64-mingw32-ar.exe"
+
+[build]
+# Use GNU toolchain by default
+target = "x86_64-pc-windows-gnu"

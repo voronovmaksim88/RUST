@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { invoke } from "@tauri-apps/api/core"
 import TheProjectTree from './components/TheProjectTree.vue'
 import AboutProject from './components/AboutProject.vue'
 
@@ -34,58 +35,18 @@ const toggleSidebar = () => {
 const loadProjectData = async () => {
   console.log('Starting to load project data...')
   isLoading.value = true
-  
+
   try {
-    console.log('Fetching from /test_project.json...')
-    const response = await fetch('/test_project.json')
-    console.log('Response status:', response.status)
-    console.log('Response ok:', response.ok)
-    console.log('Response headers:', response.headers)
-    
-    if (!response.ok) {
-      console.error(`HTTP error! status: ${response.status}`)
-      projectData.value = null
-      return
-    }
-    
-    // Сначала получаем текст ответа для отладки
-    const responseText = await response.text()
-    console.log('Response text (first 100 chars):', responseText.substring(0, 100))
-    console.log('Response text length:', responseText.length)
-    
-    // Проверяем на BOM и другие невидимые символы
-    if (responseText.charCodeAt(0) === 0xFEFF) {
-      console.log('BOM detected, removing...')
-      const cleanText = responseText.slice(1)
-      console.log('Clean text (first 100 chars):', cleanText.substring(0, 100))
-      
-      const data = JSON.parse(cleanText)
-      console.log('Parsed data after BOM removal:', data)
-      
-      if (data && data.project && data.project.name && data.project.author && data.project.log) {
-        console.log('Data structure is valid')
-        projectData.value = data
-        console.log('projectData.value set to:', projectData.value)
-      } else {
-        console.error('Invalid data structure after BOM removal:', data)
-        projectData.value = null
-      }
+    const data = await invoke('load_project_data')
+    console.log('Loaded data from Tauri:', data)
+
+    if (data && data.project && data.project.name && data.project.author && data.project.log) {
+      console.log('Data structure is valid')
+      projectData.value = data
+      console.log('projectData.value set to:', projectData.value)
     } else {
-      // Обычный парсинг без BOM
-      const data = JSON.parse(responseText)
-      console.log('Loaded data:', data)
-      console.log('Data type:', typeof data)
-      console.log('Data keys:', Object.keys(data))
-      console.log('Data.project:', data.project)
-      
-      if (data && data.project && data.project.name && data.project.author && data.project.log) {
-        console.log('Data structure is valid')
-        projectData.value = data
-        console.log('projectData.value set to:', projectData.value)
-      } else {
-        console.error('Invalid data structure:', data)
-        projectData.value = null
-      }
+      console.error('Invalid data structure:', data)
+      projectData.value = null
     }
   } catch (error) {
     console.error('Error loading project data:', error)
@@ -109,8 +70,8 @@ onMounted(() => {
     <div class="sidebar" :class="{ 'collapsed': isSidebarCollapsed }">
       <div class="sidebar-header">
         <h3 v-show="!isSidebarCollapsed">Project Tree</h3>
-        <button 
-          class="collapse-btn" 
+        <button
+          class="collapse-btn"
           :class="{ 'collapsed-btn': isSidebarCollapsed }"
           @click="toggleSidebar"
           :title="isSidebarCollapsed ? 'Развернуть' : 'Свернуть'"
@@ -205,12 +166,12 @@ onMounted(() => {
   .app-container {
     flex-direction: column;
   }
-  
+
   .sidebar {
     width: 100%;
     height: auto;
   }
-  
+
   .sidebar.collapsed {
     width: 100%;
   }

@@ -1,0 +1,14 @@
+[target.x86_64-pc-windows-gnu]
+linker = "C:\\msys64\\mingw64\\bin\\gcc.exe"
+ar = "C:\\msys64\\mingw64\\bin\\ar.exe"
+
+[env]
+# Ensure dlltool can be found
+PATH = { value = "C:\\msys64\\mingw64\\bin", relative = true }
+
+# Alternative configuration if you have MSYS2 installed in a different location
+# Just uncomment and adjust the paths below if needed:
+
+# [target.x86_64-pc-windows-gnu]
+# linker = "C:\\path\\to\\your\\msys64\\mingw64\\bin\\gcc.exe"
+# ar = "C:\\path\\to\\your\\msys64\\mingw64\\bin\\ar.exe"
