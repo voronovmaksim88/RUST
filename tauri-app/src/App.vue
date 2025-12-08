@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { invoke } from "@tauri-apps/api/core"
+import MenuBar from './components/MenuBar.vue'
 import TheProjectTree from './components/TheProjectTree.vue'
 import AboutProject from './components/AboutProject.vue'
 
@@ -17,6 +18,7 @@ interface Project {
   name: string
   author: string
   log: ProjectLog
+  devices?: Record<string, any>
 }
 
 interface ProjectData {
@@ -57,7 +59,61 @@ const loadProjectData = async () => {
   }
 }
 
+const saveProjectData = async () => {
+  if (!projectData.value) {
+    console.error('No project data to save')
+    return
+  }
 
+  try {
+    const result = await invoke('save_project_data', {
+      data: projectData.value
+    })
+    console.log('Project saved successfully:', result)
+    alert('Проект успешно сохранен!')
+  } catch (error) {
+    console.error('Error saving project data:', error)
+    alert('Ошибка при сохранении проекта: ' + error)
+  }
+}
+
+// Обработчики меню
+const handleNewProject = () => {
+  const confirmed = confirm('Создать новый проект? Несохраненные данные будут потеряны.')
+  if (confirmed) {
+    projectData.value = {
+      project: {
+        name: 'Новый проект',
+        author: 'Автор',
+        devices: {},
+        log: {
+          records: [
+            {
+              date: new Date().toISOString().split('T')[0],
+              text: 'Проект создан'
+            }
+          ]
+        }
+      }
+    }
+    console.log('New project created')
+  }
+}
+
+const handleOpenProject = () => {
+  loadProjectData()
+  console.log('Project opened')
+}
+
+const handleSaveProject = () => {
+  saveProjectData()
+}
+
+const handleSaveProjectAs = () => {
+  // TODO: Реализовать диалог выбора файла
+  alert('Функция "Сохранить как..." будет реализована позже')
+  console.log('Save project as...')
+}
 
 onMounted(() => {
   loadProjectData()
@@ -65,39 +121,59 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="app-container">
-    <!-- Левая панель с деревом проекта -->
-    <div class="sidebar" :class="{ 'collapsed': isSidebarCollapsed }">
-      <div class="sidebar-header">
-        <h3 v-show="!isSidebarCollapsed">Project Tree</h3>
-        <button
-          class="collapse-btn"
-          :class="{ 'collapsed-btn': isSidebarCollapsed }"
-          @click="toggleSidebar"
-          :title="isSidebarCollapsed ? 'Развернуть' : 'Свернуть'"
-        >
-          {{ isSidebarCollapsed ? '→' : '←' }}
-        </button>
+  <div class="app-wrapper">
+    <!-- Верхнее меню -->
+    <MenuBar
+      @new-project="handleNewProject"
+      @open-project="handleOpenProject"
+      @save-project="handleSaveProject"
+      @save-project-as="handleSaveProjectAs"
+    />
+    
+    <!-- Основной контейнер -->
+    <div class="app-container">
+      <!-- Левая панель с деревом проекта -->
+      <div class="sidebar" :class="{ 'collapsed': isSidebarCollapsed }">
+        <div class="sidebar-header">
+          <h3 v-show="!isSidebarCollapsed">Project Tree</h3>
+          <button
+            class="collapse-btn"
+            :class="{ 'collapsed-btn': isSidebarCollapsed }"
+            @click="toggleSidebar"
+            :title="isSidebarCollapsed ? 'Развернуть' : 'Свернуть'"
+          >
+            {{ isSidebarCollapsed ? '→' : '←' }}
+          </button>
+        </div>
+        <div class="sidebar-content" v-show="!isSidebarCollapsed">
+          <TheProjectTree :fileName="fileName" />
+        </div>
       </div>
-      <div class="sidebar-content" v-show="!isSidebarCollapsed">
-        <TheProjectTree :fileName="fileName" />
-      </div>
-    </div>
 
-    <!-- Основной контент -->
-    <main class="main-content">
-      <AboutProject :projectData="projectData" />
-    </main>
+      <!-- Основной контент -->
+      <main class="main-content">
+        <AboutProject :projectData="projectData" />
+      </main>
+    </div>
   </div>
 </template>
 
 <style>
 @import './styles.css';
 
-.app-container {
+.app-wrapper {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   width: 100%;
+}
+
+.app-container {
+  display: flex;
+  flex: 1;
+  height: calc(100vh - 40px);
+  width: 100%;
+  overflow: hidden;
 }
 
 .sidebar {
