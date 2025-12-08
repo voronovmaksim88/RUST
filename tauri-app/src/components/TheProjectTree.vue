@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, nextTick } from 'vue'
-import { invoke } from "@tauri-apps/api/core"
+import { ref, computed, nextTick } from 'vue'
 
 interface LogRecord {
   date: string
@@ -24,25 +23,17 @@ interface ProjectData {
 
 interface Props {
   fileName: string
+  projectData: ProjectData | null
 }
 
-defineProps<Props>()
-const projectData = ref<ProjectData | null>(null)
+interface Emits {
+  (e: 'project-updated', data: ProjectData): void
+}
+
+const props = defineProps<Props>()
+const emit = defineEmits<Emits>()
 const isProjectExpanded = ref(true)
 const isDevicesExpanded = ref(true)
-
-const loadProjectData = async () => {
-  try {
-    // Debug: check file path
-    const debugPath = await invoke('get_project_file_path_debug')
-    console.log('Debug:', debugPath)
-
-    const data = await invoke('load_project_data')
-    projectData.value = data
-  } catch (error) {
-    console.error('Error loading project data:', error)
-  }
-}
 
 const toggleProject = () => {
   isProjectExpanded.value = !isProjectExpanded.value
@@ -53,8 +44,8 @@ const toggleDevices = () => {
 }
 
 const deviceCount = computed(() => {
-  if (!projectData.value?.project?.devices) return 0
-  return Object.keys(projectData.value.project.devices).length
+  if (!props.projectData?.project?.devices) return 0
+  return Object.keys(props.projectData.project.devices).length
 })
 
 const contextMenu = ref<{
@@ -142,7 +133,7 @@ const closeCreateDeviceModal = () => {
 }
 
 const createDevice = async () => {
-  if (!projectData.value?.project?.devices) return
+  if (!props.projectData?.project?.devices) return
 
   // Validate form
   if (!newDeviceForm.value.name.trim() || !newDeviceForm.value.type.trim() || !newDeviceForm.value.port.trim()) {
@@ -150,67 +141,68 @@ const createDevice = async () => {
     return
   }
 
-  try {
-    // Generate unique device key
-    const deviceKeys = Object.keys(projectData.value.project.devices)
-    let deviceKey = 'device1'
-    let counter = 1
-    while (deviceKeys.includes(deviceKey)) {
-      counter++
-      deviceKey = `device${counter}`
-    }
-
-    // Add new device to local data
-    projectData.value.project.devices[deviceKey] = {
-      name: newDeviceForm.value.name.trim(),
-      type: newDeviceForm.value.type.trim(),
-      port: newDeviceForm.value.port.trim()
-    }
-
-    // Save updated data using Tauri command
-    const result = await invoke('save_project_data', {
-      data: projectData.value
-    })
-
-    console.log(`Device created successfully:`, result)
-    closeCreateDeviceModal()
-  } catch (error) {
-    console.error('Error creating device:', error)
-    // Reload data to revert changes
-    await loadProjectData()
+  // Generate unique device key
+  const deviceKeys = Object.keys(props.projectData.project.devices)
+  let deviceKey = 'device1'
+  let counter = 1
+  while (deviceKeys.includes(deviceKey)) {
+    counter++
+    deviceKey = `device${counter}`
   }
+
+  // Create updated data
+  const updatedData: ProjectData = {
+    project: {
+      ...props.projectData.project,
+      devices: {
+        ...props.projectData.project.devices,
+        [deviceKey]: {
+          name: newDeviceForm.value.name.trim(),
+          type: newDeviceForm.value.type.trim(),
+          port: newDeviceForm.value.port.trim()
+        }
+      }
+    }
+  }
+
+  // Emit event to parent component
+  emit('project-updated', updatedData)
+  closeCreateDeviceModal()
 }
 
 const deleteDevice = async (deviceKey: string) => {
-  if (!projectData.value?.project?.devices) return
+  if (!props.projectData?.project?.devices) return
 
-  try {
-    // Remove device from local data
-    delete projectData.value.project.devices[deviceKey]
+  // Create updated devices object without the deleted device
+  const updatedDevices = { ...props.projectData.project.devices }
+  delete updatedDevices[deviceKey]
 
-    // Save updated data using Tauri command
-    const result = await invoke('save_project_data', {
-      data: projectData.value
-    })
-
-    console.log(`Device ${deviceKey} deleted successfully:`, result)
-  } catch (error) {
-    console.error('Error deleting device:', error)
-    // Reload data to revert changes
-    await loadProjectData()
+  // Create updated data
+  const updatedData: ProjectData = {
+    project: {
+      ...props.projectData.project,
+      devices: updatedDevices
+    }
   }
 
+  // Emit event to parent component
+  emit('project-updated', updatedData)
   hideContextMenu()
 }
 
-onMounted(() => {
-  loadProjectData()
-})
+// Не загружаем данные автоматически при монтировании
+// Данные будут приходить через props от родительского компонента
 </script>
 
 <template>
   <div class="project-tree">
-    <div class="tree-container">
+    <!-- Пустое состояние -->
+    <div v-if="!projectData" class="empty-tree">
+      <div class="empty-tree-icon">📂</div>
+      <p>Проект не загружен</p>
+    </div>
+    
+    <div v-else class="tree-container">
       <!-- Проект -->
       <div class="tree-item project-item">
         <div class="tree-header" @click="toggleProject">
@@ -352,6 +344,27 @@ onMounted(() => {
 <style scoped>
 .project-tree {
   padding: 0;
+}
+
+.empty-tree {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: #6c757d;
+}
+
+.empty-tree-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.empty-tree p {
+  font-size: 0.9rem;
+  margin: 0;
 }
 
 .tree-container {

@@ -70,8 +70,11 @@ const formatDate = (dateString: string): string => {
     </div>
   </div>
   
-  <div v-else class="loading">
-    Loading project data...
+  <div v-else class="empty-state">
+    <div class="empty-icon">📁</div>
+    <h2>Нет открытого проекта</h2>
+    <p>Выберите <strong>File → Открыть</strong> для загрузки проекта</p>
+    <p>или <strong>File → Новый</strong> для создания нового проекта</p>
   </div>
 </template>
 
@@ -163,5 +166,37 @@ const formatDate = (dateString: string): string => {
   padding: 2rem;
   color: #6c757d;
   font-style: italic;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  text-align: center;
+  color: #6c757d;
+}
+
+.empty-icon {
+  font-size: 5rem;
+  margin-bottom: 1.5rem;
+  opacity: 0.5;
+}
+
+.empty-state h2 {
+  color: #495057;
+  margin-bottom: 1rem;
+}
+
+.empty-state p {
+  margin: 0.5rem 0;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.empty-state strong {
+  color: #2c3e50;
+  font-weight: 600;
 }
 </style>

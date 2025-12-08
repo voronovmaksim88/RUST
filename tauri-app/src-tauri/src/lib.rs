@@ -2,6 +2,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::env;
 
 mod scan_available_ports;
 
@@ -68,28 +69,26 @@ fn get_project_file_path() -> Result<PathBuf, String> {
 }
 
 #[tauri::command]
-fn save_project_data(data: ProjectData) -> Result<String, String> {
-    println!("save_project_data called");
+fn save_project_data(file_path: String, data: ProjectData) -> Result<String, String> {
+    println!("save_project_data called with path: {}", file_path);
     let json_content = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
-    let project_file_path = get_project_file_path()?;
 
-    println!("About to write to: {:?}", project_file_path);
-    fs::write(&project_file_path, &json_content).map_err(|e| {
+    println!("About to write to: {}", file_path);
+    fs::write(&file_path, &json_content).map_err(|e| {
         println!("Error writing file: {}", e);
         e.to_string()
     })?;
-    println!("Successfully wrote to: {:?}", project_file_path);
+    println!("Successfully wrote to: {}", file_path);
 
-    Ok(format!("Saved to: {}", project_file_path.display()))
+    Ok(format!("Saved to: {}", file_path))
 }
 
 #[tauri::command]
-fn load_project_data() -> Result<ProjectData, String> {
-    println!("load_project_data called");
-    let project_file_path = get_project_file_path()?;
-
-    println!("Attempting to read from: {:?}", project_file_path);
-    let content = fs::read_to_string(&project_file_path).map_err(|e| {
+fn load_project_data(file_path: String) -> Result<ProjectData, String> {
+    println!("load_project_data called with path: {}", file_path);
+    
+    println!("Attempting to read from: {}", file_path);
+    let content = fs::read_to_string(&file_path).map_err(|e| {
         println!("Error reading file: {}", e);
         e.to_string()
     })?;
@@ -110,16 +109,34 @@ fn get_project_file_path_debug() -> Result<String, String> {
     Ok(format!("Using file path: {}", project_file_path.display()))
 }
 
+#[tauri::command]
+fn get_exe_directory() -> Result<String, String> {
+    // Получаем путь к исполняемому файлу
+    let exe_path = env::current_exe().map_err(|e| e.to_string())?;
+    
+    // Получаем директорию, в которой находится exe
+    let exe_dir = exe_path
+        .parent()
+        .ok_or("Failed to get exe directory")?
+        .to_path_buf();
+    
+    println!("Exe directory: {:?}", exe_dir);
+    
+    Ok(exe_dir.to_string_lossy().to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             greet,
             scan_available_ports_cmd,
             save_project_data,
             load_project_data,
-            get_project_file_path_debug
+            get_project_file_path_debug,
+            get_exe_directory
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
